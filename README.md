@@ -16,6 +16,8 @@ Web app chạy trên trình duyệt điện thoại, giao diện như ứng dụ
 
 Thanh toán dùng VietQR và SePay theo luồng: API tạo đơn → Supabase lưu đơn → người dùng chuyển khoản → SePay gửi webhook → server xác minh đúng mã/đúng tiền → tự kích hoạt quyền Pro. Các biến môi trường bắt buộc trên Vercel: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SEPAY_WEBHOOK_API_KEY`. Chạy file `supabase-financial-twin-billing.sql` một lần trong Supabase trước khi nhận thanh toán.
 
+Đăng nhập Google dùng Supabase Auth. Tài khoản giúp đồng bộ quyền Pro giữa các thiết bị; dữ liệu tài chính vẫn chỉ lưu cục bộ trên thiết bị và không tự tải lên Supabase.
+
 ## Tính năng
 
 **Trọng tâm**

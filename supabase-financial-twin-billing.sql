@@ -21,3 +21,7 @@ create unique index if not exists financial_twin_orders_sepay_uidx on public.fin
 create index if not exists financial_twin_orders_device_idx on public.financial_twin_orders (device_id, pro_den desc);
 create index if not exists financial_twin_orders_status_idx on public.financial_twin_orders (trang_thai);
 alter table public.financial_twin_orders enable row level security;
+
+alter table public.financial_twin_orders add column if not exists user_id uuid;
+alter table public.financial_twin_orders add column if not exists user_email text;
+create index if not exists financial_twin_orders_user_idx on public.financial_twin_orders (user_id, pro_den desc);

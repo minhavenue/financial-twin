@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { authUser } from "./_auth.js";
 
 const PLANS = {
   pro_monthly: { amount: 79000, days: 30, name: "Financial Twin Pro theo tháng" },
@@ -37,10 +38,11 @@ export default async function handler(req, res) {
   const body = typeof req.body === "string" ? (() => { try { return JSON.parse(req.body); } catch { return null; } })() : req.body;
   const plan = PLANS[body?.plan], deviceId = String(body?.deviceId || "");
   if (!plan || !validDevice(deviceId)) return reply(res, { error: "Thông tin gói thanh toán không hợp lệ." }, 400);
+  const user = await authUser(req, url, key);
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const code = orderCode();
-    const result = await insert(url, key, { ma_don: code, device_id: deviceId, plan: body.plan, so_tien_vnd: plan.amount, so_ngay: plan.days, trang_thai: "cho_thanh_toan", noi_dung_chuyen_khoan: code, het_han_luc: expiresAt });
+    const result = await insert(url, key, { ma_don: code, device_id: deviceId, user_id: user?.id || null, user_email: user?.email || null, plan: body.plan, so_tien_vnd: plan.amount, so_ngay: plan.days, trang_thai: "cho_thanh_toan", noi_dung_chuyen_khoan: code, het_han_luc: expiresAt });
     if (result.ok) return reply(res, { maDon: code, plan: body.plan, tenGoi: plan.name, soTienVnd: plan.amount, qrUrl: qrUrl(code, plan.amount), hetHanLuc: expiresAt });
     const text = await result.text();
     if (result.status !== 409 && !text.includes("duplicate key")) { console.error("Order insert failed", result.status, text); return reply(res, { error: "Không tạo được đơn thanh toán." }, 500); }

@@ -256,6 +256,7 @@ textarea.in { resize: vertical; min-height: 84px; }
 .waiting i { width:9px;height:9px;border-radius:50%;background:var(--warn);animation:pulse 1.2s infinite }
 .spinner { width:28px;height:28px;border:3px solid var(--line);border-top-color:var(--twin);border-radius:50%;animation:spin .8s linear infinite }
 .pay-success { text-align:center;padding:24px 8px }.success-mark { width:70px;height:70px;display:grid;place-items:center;margin:0 auto 14px;border-radius:50%;background:var(--good-soft);color:var(--good);font-size:38px;font-weight:700 }
+.auth-card{display:grid;gap:14px}.auth-copy h2{margin:0 0 5px}.auth-copy p{margin:0}.google-btn{background:#fff;color:#202124;border:1px solid #d7dce2;box-shadow:0 1px 2px #00000012}.google-mark{width:23px;height:23px;border-radius:50%;display:inline-grid;place-items:center;font:700 16px Arial;color:#4285f4;background:#fff}.auth-avatar{width:44px;height:44px;display:grid;place-items:center;overflow:hidden;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:700}.auth-avatar img{width:100%;height:100%;object-fit:cover}.auth-card.signed .btn{margin-top:2px}
 @keyframes spin { to { transform:rotate(360deg) } }
 @keyframes pulse { 50% { opacity:.35;transform:scale(.75) } }
 .chips.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }

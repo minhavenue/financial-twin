@@ -93,6 +93,13 @@ const changed = () => { twinRes = null; stressRes = null; };
 const BILL_KEY = 'financial-twin-billing-v1';
 let billing = lsGet(BILL_KEY) || { pro: false, plan: null, proDen: null, usageMonth: '', twinUses: 0 };
 let payOrder = null, payTimer = null;
+const SUPABASE_URL = 'https://wqmbmffpkyqnskdhfxno.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxbWJtZmZwa3lxbnNrZGhmeG5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NDEwODYsImV4cCI6MjEwNjMxNzA4Nn0.Tv837ZsDGvNVlPUCNcFhu1hrRmHgWEIBbK38FeU9c70';
+const authClient = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, detectSessionInUrl: true } }) || null;
+let authSession = null, authReady = false;
+const authHeaders = () => authSession?.access_token ? { authorization: `Bearer ${authSession.access_token}` } : {};
+const authName = () => authSession?.user?.user_metadata?.full_name || authSession?.user?.user_metadata?.name || authSession?.user?.email || '';
+const authAvatar = () => authSession?.user?.user_metadata?.avatar_url || authSession?.user?.user_metadata?.picture || '';
 function deviceId() {
   let id = ''; try { id = localStorage.getItem('financial-twin-device-id') || ''; } catch (e) {}
   if (!/^[a-f0-9-]{20,80}$/i.test(id)) { id = crypto.randomUUID(); try { localStorage.setItem('financial-twin-device-id', id); } catch (e) {} }
@@ -104,7 +111,26 @@ const usageMonth = () => new Date().toISOString().slice(0, 7);
 function normalizeUsage() { if (billing.usageMonth !== usageMonth()) { billing.usageMonth = usageMonth(); billing.twinUses = 0; saveBilling(); } }
 const twinLeft = () => { normalizeUsage(); return Math.max(0, 3 - Number(billing.twinUses || 0)); };
 async function refreshEntitlement(quiet = true) {
-  try { const r = await fetch(`/api/entitlement?deviceId=${encodeURIComponent(deviceId())}`, { cache: 'no-store' }); if (!r.ok) return; const x = await r.json(); billing.pro = !!x.pro; billing.plan = x.plan || null; billing.proDen = x.proDen || null; saveBilling(); if (!quiet) render(); } catch (e) {}
+  try { const r = await fetch(`/api/entitlement?deviceId=${encodeURIComponent(deviceId())}`, { cache: 'no-store', headers: authHeaders() }); if (!r.ok) return; const x = await r.json(); billing.pro = !!x.pro; billing.plan = x.plan || null; billing.proDen = x.proDen || null; saveBilling(); if (!quiet) render(); } catch (e) {}
+}
+async function initAuth() {
+  if (!authClient) { authReady = true; return; }
+  const { data } = await authClient.auth.getSession(); authSession = data.session || null; authReady = true;
+  authClient.auth.onAuthStateChange((_event, session) => { authSession = session; refreshEntitlement(false); });
+}
+async function signInGoogle() {
+  if (!authClient) { toast('Đăng nhập chưa sẵn sàng.'); return; }
+  const { error } = await authClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } });
+  if (error) toast('Chưa mở được đăng nhập Google.');
+}
+async function signOutGoogle() {
+  if (!authClient) return; await authClient.auth.signOut(); authSession = null; await refreshEntitlement(); closeSheet(); render(); toast('Đã đăng xuất');
+}
+function accountCard() {
+  if (!authReady) return `<section class="card auth-card"><span class="spinner"></span><span>Đang kiểm tra tài khoản…</span></section>`;
+  if (!authSession) return `<section class="card auth-card"><div class="auth-copy"><h2>Đăng nhập để giữ quyền Pro</h2><p class="small muted">Đổi điện thoại vẫn nhận đúng gói đã mua. Dữ liệu tài chính không tự tải lên tài khoản.</p></div><button class="btn google-btn" data-act="googlelogin"><span class="google-mark">G</span> Tiếp tục với Google</button></section>`;
+  const avatar = authAvatar();
+  return `<section class="card auth-card signed"><div class="row"><span class="auth-avatar">${avatar ? `<img src="${esc(avatar)}" alt="">` : esc(authName().slice(0, 1).toUpperCase())}</span><div class="grow"><b>${esc(authName())}</b><div class="small muted">${esc(authSession.user.email || '')}</div></div><span class="pill good">Đã đăng nhập</span></div><button class="btn ghost block" data-act="googlelogout">Đăng xuất</button></section>`;
 }
 function proLock(title, detail) {
   return `<section class="card pro-lock"><span class="pro-crown">${ic('star')}</span><h2>${esc(title)}</h2><p class="small muted">${esc(detail)}</p><button class="btn block" data-act="pricing">Xem gói Pro</button></section>`;
@@ -124,7 +150,7 @@ function openPricing(note = '') {
 async function createPayment(plan) {
   sheet('Thanh toán', '<div class="empty"><span class="spinner"></span><b>Đang tạo đơn thanh toán…</b></div>', '', { full: true });
   try {
-    const r = await fetch('/api/create-order', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plan, deviceId: deviceId() }) });
+    const r = await fetch('/api/create-order', { method: 'POST', headers: { 'content-type': 'application/json', ...authHeaders() }, body: JSON.stringify({ plan, deviceId: deviceId() }) });
     const x = await r.json(); if (!r.ok) throw new Error(x.error || 'Không tạo được đơn.'); payOrder = x; renderPayment(); pollPayment();
   } catch (e) { sheet('Thanh toán', `<div class="empty"><b>Chưa tạo được đơn</b><p class="small muted">${esc(e.message)}</p><button class="btn" data-act="pricing">Quay lại bảng giá</button></div>`, '', { full: true }); }
 }
@@ -954,7 +980,7 @@ function openBillEdit(id, preset) {
 /* ---------- Cài đặt, quyền riêng tư ---------- */
 function openSettings() {
   const bal = FT.balances(S);
-  sheet('Cài đặt', `<section class="card"><div class="card-h"><h2>Hồ sơ</h2><button class="btn-sm" data-act="profiles">Đổi hồ sơ</button></div><div class="row"><span class="cico" style="background:var(--accent-soft);color:var(--accent)">${ic(S.sample ? 'spark' : 'coach')}</span><div class="grow"><b>${esc(curProfile().name)}</b><div class="small muted">${PR.list.length} hồ sơ trên thiết bị này</div></div><button class="btn-sm acc" data-act="newprofile">${ic('plus')} Tạo mới</button></div></section>
+  sheet('Cài đặt', `${accountCard()}<section class="card"><div class="card-h"><h2>Hồ sơ</h2><button class="btn-sm" data-act="profiles">Đổi hồ sơ</button></div><div class="row"><span class="cico" style="background:var(--accent-soft);color:var(--accent)">${ic(S.sample ? 'spark' : 'coach')}</span><div class="grow"><b>${esc(curProfile().name)}</b><div class="small muted">${PR.list.length} hồ sơ trên thiết bị này</div></div><button class="btn-sm acc" data-act="newprofile">${ic('plus')} Tạo mới</button></div></section>
   <section class="card"><div class="card-h"><h2>Gói dịch vụ</h2><span class="pill ${isPro() ? 'good' : 'neutral'}">${isPro() ? 'PRO' : 'MIỄN PHÍ'}</span></div><div class="row"><span class="cico" style="background:var(--twin-soft);color:var(--twin)">${ic('star')}</span><div class="grow"><b>${isPro() ? (billing.plan === 'pro_yearly' ? 'Pro theo năm' : 'Pro theo tháng') : 'Gói miễn phí'}</b><div class="small muted">${isPro() ? 'Có hiệu lực đến ' + new Date(billing.proDen).toLocaleDateString('vi-VN') : twinLeft() + '/3 lượt mô phỏng còn lại trong tháng'}</div></div><button class="btn-sm acc" data-act="pricing">${isPro() ? 'Chi tiết' : 'Nâng cấp'}</button></div></section>
   <section class="card"><div class="card-h"><h2>Ví và số dư</h2><button class="btn-sm" data-act="addacc">${ic('plus')} Thêm ví</button></div>
     ${S.accounts.map(a => `<div class="li"><span class="cico" style="background:var(--accent-soft);color:var(--accent)">${ic(a.type === 'credit' ? 'card' : a.type === 'cash' ? 'wallet' : a.type === 'ewallet' ? 'spark' : 'home')}</span><div class="main"><div class="t">${esc(a.name)}</div><div class="s">${a.type === 'credit' ? 'Dư nợ hiện tại ' + FT.vnd(Math.max(0, -(bal[a.id] || 0))) : 'Số dư hiện tại ' + FT.vnd(bal[a.id] || 0)}</div></div><button class="btn-sm" data-act="editacc" data-id="${a.id}">Sửa</button></div>`).join('')}
@@ -1119,6 +1145,8 @@ document.addEventListener('click', async e => {
     case 'twin': closeSheet(); tab = 'twin'; twinTab = 'whatif'; render(); window.scrollTo(0, 0); break;
     case 'hide': S.settings.hide = !S.settings.hide; save(); render(); if ($('#layer .sheet') && $('#layer .sheet-h h2').textContent === 'Cài đặt') openSettings(); break;
     case 'settings': openSettings(); break;
+    case 'googlelogin': await signInGoogle(); break;
+    case 'googlelogout': await signOutGoogle(); break;
     case 'pricing': clearInterval(payTimer); payOrder = null; openPricing(); break;
     case 'buy': createPayment(id); break;
     case 'report': openReport(); break;
@@ -1271,7 +1299,7 @@ document.addEventListener('drop', e => { const d = e.target.closest && e.target.
 loadProfiles();
 openProfile(PR.active);
 render();
-refreshEntitlement().then(() => render());
+initAuth().then(() => refreshEntitlement()).then(() => render());
 (async () => { try { const s = await window.claude?.use?.('sample'); if (s) { AI = s; const lim = await s.limits().catch(() => null); AIimg = !!(lim && lim.images); AItools = !!(lim && lim.tools); if (S && (tab === 'twin' || tab === 'plan')) render(); } } catch (e) {} })();
 window.__FT_TEST__ = { get S() { return S; }, runTwin, runStress, askChat, startImport, miniPdfLines, readFile };
 })();
