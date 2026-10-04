@@ -371,8 +371,8 @@
       `Giữ mức chi ${vnd(S.pace)}/ngày thì đến ${dShort(S.nextPay)} bạn ${S.atPace >= 0 ? 'còn dư' : 'thiếu'} ${vnd(Math.abs(S.atPace))} sau khi trả hóa đơn và giữ ${vnd(M.buffer)} dự phòng. Điểm tối đa khi dư từ 10% chi tiêu tháng.`,
       S.atPace < 0 ? `Giữ chi dưới ${vnd(S.safe)}/ngày đến ngày lương.` : 'Duy trì mức chi hiện tại.');
     const inc = M.valid.map(k => monthSummary(st, k).income), sp = M.valid.map(k => monthSummary(st, k).spend);
-    const rate = sum(inc) > 0 ? (sum(inc) - sum(sp)) / sum(inc) : 0;
-    push('saving', 'Tỷ lệ tiết kiệm', 20, rate / 0.2, `${pct(rate)} thu nhập`, `Trung bình ${M.nM || 0} tháng gần nhất, phần thu nhập không tiêu đi (kể cả tiền chuyển vào quỹ). Điểm tối đa từ 20%.`,
+    const est = !M.nM; const rate = est ? (M.income > 0 ? (M.income - M.fixed - M.loanPay - M.varMonthly) / M.income : 0) : (sum(inc) > 0 ? (sum(inc) - sum(sp)) / sum(inc) : 0);
+    push('saving', 'Tỷ lệ tiết kiệm', 20, rate / 0.2, `${est ? 'Dự kiến ' : ''}${pct(rate)} thu nhập`, est ? 'Chưa đủ một tháng dữ liệu nên app dự kiến từ thu nhập, chi cố định và ngân sách bạn đã nhập. Điểm tối đa từ 20%.' : `Trung bình ${M.nM} tháng gần nhất, phần thu nhập không tiêu đi (kể cả tiền chuyển vào quỹ). Điểm tối đa từ 20%.`,
       rate < 0.2 ? `Tăng thêm ${vnd(c10k((0.2 - rate) * mean(inc)))}/tháng để đạt 20%.` : 'Đang tốt.');
     const em = M.burn > 0 ? M.reserve / M.burn : 0;
     push('reserve', 'Quỹ khẩn cấp', 20, em / 6, `Đủ ${months1(em)} tháng chi tiêu`, `Quỹ dự phòng ${vnd(M.reserve)} so với chi tiêu ${vnd(M.burn)}/tháng. Chuẩn an toàn là 6 tháng.`,

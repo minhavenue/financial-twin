@@ -22,7 +22,15 @@ Web app chạy trên trình duyệt điện thoại, giao diện như ứng dụ
 | Nhập liệu đa phương thức | Gõ, giọng nói (micro bàn phím), ảnh hóa đơn, dán thông báo ngân hàng, sao kê PDF, CSV, Excel; tự phát hiện trùng, đánh dấu dòng chưa chắc chắn, chờ xác nhận trước khi lưu |
 | Quyền riêng tư | Che số tài khoản trước khi gửi AI, tô đen vùng nhạy cảm trên ảnh, nhật ký dữ liệu đã gửi AI, mã PIN kèm mã hóa AES-GCM |
 
-**Nền tảng:** tổng quan tài chính, ví và số dư (tiền mặt, ngân hàng, ví điện tử, thẻ tín dụng), quản lý thu–chi, phân loại tự động 10 nhóm có học thói quen, ngân sách cảnh báo 70% / 90% / vượt, mục tiêu tài chính, hóa đơn và khoản định kỳ (tự phát hiện từ lịch sử), báo cáo tuần và tháng, thiết lập 3 phút hoặc dựng từ sao kê, xuất CSV / JSON, xóa toàn bộ dữ liệu.
+**Nền tảng:** tổng quan tài chính, ví và số dư (tiền mặt, ngân hàng, ví điện tử, thẻ tín dụng), quản lý thu–chi, phân loại tự động 10 nhóm có học thói quen, ngân sách cảnh báo 70% / 90% / vượt, mục tiêu tài chính, hóa đơn và khoản định kỳ (tự phát hiện từ lịch sử), báo cáo tuần và tháng, xuất CSV / JSON, xóa dữ liệu.
+
+**Nhiều hồ sơ, tạo dữ liệu từ đầu cho từng người:** mỗi hồ sơ là một bộ dữ liệu riêng trên thiết bị (mã PIN riêng). Dữ liệu mẫu luôn được giữ để trình diễn. Tạo hồ sơ mới bằng 3 cách:
+
+1. **Nhập thông tin trong 3 phút** (5 bước): thu nhập và ngày lương → số dư từng ví → khoản cố định và trả góp còn bao nhiêu kỳ → ngân sách gợi ý → quỹ dự phòng đang có và một mục tiêu.
+2. **Tải sao kê ngân hàng** (PDF, CSV, Excel 1–3 tháng): app tự nhận lương, hóa đơn, trả góp, gợi ý ngân sách.
+3. **Bắt đầu trống:** tự thêm ví và giao dịch.
+
+Chuyển hồ sơ bằng cách bấm vào tên ở góc trên bên trái, hoặc trong *Cài đặt → Hồ sơ*.
 
 ## Chạy thử trên máy
 
@@ -79,7 +87,7 @@ financial-twin/
 - Phần AI (chatbot gọi AI, đọc ảnh hóa đơn, nút "AI giải thích") dùng khả năng `sample` của trang Claude Artifact. Khi chạy trên GitHub Pages hoặc Vercel, app tự chuyển sang **chế độ tính tự động**. Muốn có AI trên tên miền riêng cần thêm một máy chủ nhỏ gọi API mô hình AI bằng khóa riêng (nằm trong lộ trình).
 - Nút tải file (xuất CSV/JSON, sao kê mẫu) dùng khả năng `downloads` của Claude; ở nơi khác app hiện nội dung để sao chép.
 - Đọc PDF dùng pdf.js và đọc Excel dùng SheetJS, tải từ cdnjs khi cần. Nếu không tải được, PDF vẫn đọc được bằng bộ đọc dự phòng viết sẵn trong app.
-- Dữ liệu lưu trong trình duyệt của từng thiết bị (`localStorage`). Khi bật mã PIN, dữ liệu được mã hóa AES-GCM 256-bit bằng khóa sinh từ PIN (PBKDF2, 150.000 vòng).
+- Dữ liệu lưu trong trình duyệt của từng thiết bị (`localStorage`), mỗi hồ sơ một khóa riêng. Khi bật mã PIN, dữ liệu được mã hóa AES-GCM 256-bit bằng khóa sinh từ PIN (PBKDF2, 150.000 vòng).
 - Bản dự thi chưa kết nối ngân hàng. Kết nối chính thức dự kiến qua Open API theo Thông tư 64/2024/TT-NHNN.
 
 ## Dữ liệu mẫu

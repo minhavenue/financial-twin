@@ -19,14 +19,34 @@ const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 let cryptoKey = null, cryptoSalt = null;
 async function deriveKey(pin, salt) { const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveKey']); return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']); }
-function readRaw() { try { const r = localStorage.getItem(KEY); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+const PKEY = 'financial-twin-profiles';
+let PR = null; // {active, list:[{id,name,sample}]}
+const skey = id => KEY + ':' + id;
+function lsGet(k) { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch (e) {} }
+function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+function loadProfiles() {
+  PR = lsGet(PKEY);
+  if (!PR || !PR.list || !PR.list.length) {
+    const old = lsGet(KEY); PR = { active: 'p1', list: [{ id: 'p1', name: old && !old.enc && !old.sample && old.profile && old.profile.name ? old.profile.name : (old && !old.enc && !old.sample ? 'Hồ sơ của tôi' : 'Dữ liệu mẫu'), sample: !old || !!old.sample }] };
+    if (old) { lsSet(skey('p1'), old); lsDel(KEY); }
+    lsSet(PKEY, PR);
+  }
+  if (!PR.list.some(p => p.id === PR.active)) PR.active = PR.list[0].id;
+}
+const saveProfiles = () => lsSet(PKEY, PR);
+const curProfile = () => PR.list.find(p => p.id === PR.active);
+function readRaw() { return lsGet(skey(PR.active)); }
 let saveChain = Promise.resolve();
 function save() {
-  const snapshot = JSON.stringify(S);
+  if (!S) return;
+  const snapshot = JSON.stringify(S), pid = PR.active, key = cryptoKey, salt = cryptoSalt, pinOn = !!S.settings.pinOn;
+  const p = curProfile(); if (p) { const nm = S.sample ? 'Dữ liệu mẫu' : (S.profile && S.profile.name) || p.name || 'Hồ sơ mới'; if (p.name !== nm || p.sample !== !!S.sample) { p.name = nm; p.sample = !!S.sample; saveProfiles(); } }
   saveChain = saveChain.then(async () => {
     try {
-      if (cryptoKey && S.settings.pinOn) { const iv = crypto.getRandomValues(new Uint8Array(12)); const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, new TextEncoder().encode(snapshot)); localStorage.setItem(KEY, JSON.stringify({ enc: 1, salt: b64(cryptoSalt), iv: b64(iv), data: b64(ct) })); }
-      else localStorage.setItem(KEY, snapshot);
+      const k = skey(pid);
+      if (key && pinOn) { const iv = crypto.getRandomValues(new Uint8Array(12)); const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(snapshot)); localStorage.setItem(k, JSON.stringify({ enc: 1, salt: b64(salt), iv: b64(iv), data: b64(ct) })); }
+      else localStorage.setItem(k, snapshot);
     } catch (e) {}
   });
 }
@@ -35,11 +55,22 @@ async function tryUnlock(pin, raw) {
 }
 
 let S = null;
-const raw0 = readRaw();
-let lockedRaw = raw0 && raw0.enc ? raw0 : null;
-if (!lockedRaw) S = raw0 && raw0.v === 2 ? raw0 : FT.sampleState(sampleToday());
 const fixState = () => { S.settings = S.settings || {}; if (S.settings.buffer == null) S.settings.buffer = 500000; S.aiLog = S.aiLog || []; S.rules = S.rules || {}; };
-if (S) fixState();
+let lockedRaw = null;
+function createProfile(name) {
+  const id = 'p' + FT.uid(); PR.list.push({ id, name: name || 'Hồ sơ ' + (PR.list.length + 1), sample: false }); saveProfiles();
+  const keepLog = S ? S.aiLog : [];
+  openProfile(id); S = Object.assign(FT.emptyState(), { v: 2 }); fixState(); S.aiLog = keepLog || []; save(); return id;
+}
+function ensureOwnProfile() { if (!S || S.sample) createProfile(); }
+function openProfile(id) {
+  PR.active = id; saveProfiles(); cryptoKey = null; cryptoSalt = null; chat = []; changed(); draftPlan = null;
+  const raw = readRaw(); lockedRaw = raw && raw.enc ? raw : null;
+  if (lockedRaw) { S = null; return false; }
+  S = raw && raw.v === 2 ? raw : (curProfile().sample ? FT.sampleState(sampleToday()) : Object.assign(FT.emptyState(), { v: 2 }));
+  fixState(); return true;
+}
+
 
 let tab = 'home', planTab = 'coach', twinTab = 'whatif', txFilter = 'all', txQuery = '', txLimit = 60, reportPeriod = 'month';
 let twinRes = null, twinQ = '', followPlan = true, builder = { type: 'purchase', amount: 20000000, months: 12, rate: 0, pct: 30, target: 100000000, label: '' };
@@ -73,22 +104,22 @@ function render() {
 }
 const navBtn = (id, icon, label) => `<button class="${tab === id ? 'on' : ''}" data-act="tab" data-id="${id}" ${tab === id ? 'aria-current="page"' : ''}>${ic(icon)}<span>${label}</span></button>`;
 function header(sub) {
-  return `<header class="top"><div class="brand"><span class="mark"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="9" cy="12" r="5.2" fill="none" stroke="#3CC2A9" stroke-width="2"/><circle cx="15" cy="12" r="5.2" fill="none" stroke="#A497F7" stroke-width="2" stroke-dasharray="2.6 2.2"/></svg></span>
-  <div style="min-width:0"><h1>${S.profile.name ? 'Chào ' + esc(S.profile.name) : 'Financial Twin'}</h1><div class="sub">${sub || fullDate(T())}</div></div></div>
+  return `<header class="top"><button class="brand" data-act="profiles" aria-label="Đổi hoặc tạo hồ sơ" style="text-align:left"><span class="mark"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="9" cy="12" r="5.2" fill="none" stroke="#3CC2A9" stroke-width="2"/><circle cx="15" cy="12" r="5.2" fill="none" stroke="#A497F7" stroke-width="2" stroke-dasharray="2.6 2.2"/></svg></span>
+  <div style="min-width:0"><h1>${S.profile.name ? 'Chào ' + esc(S.profile.name) : 'Financial Twin'}</h1><div class="sub">${PR.list.length > 1 ? esc(curProfile().name) + ' · ' : ''}${sub || fullDate(T())}</div></div></button>
   <div class="row"><button class="iconbtn" data-act="hide" aria-label="${S.settings.hide ? 'Hiện số tiền' : 'Ẩn số tiền'}">${ic(S.settings.hide ? 'eyeoff' : 'eye')}</button>
   <button class="iconbtn" data-act="settings" aria-label="Cài đặt">${ic('gear')}</button></div></header>`;
 }
-const sampleBanner = () => S.sample ? `<div class="banner">${ic('spark')}<div class="grow"><b>Dữ liệu mẫu</b> · hôm nay giả lập ${FT.dLabel(T())}</div><button class="btn-sm acc" data-act="onboard">Dùng dữ liệu của tôi</button></div>` : S.fromStatement ? `<div class="banner">${ic('doc')}<div class="grow"><b>Dựng từ sao kê</b> · số liệu tính đến ${FT.dLabel(T())}</div><button class="btn-sm" data-act="resetsample">Về dữ liệu mẫu</button></div>` : '';
+const sampleBanner = () => S.sample ? `<div class="banner">${ic('spark')}<div class="grow"><b>Dữ liệu mẫu</b> · hôm nay giả lập ${FT.dLabel(T())}</div><button class="btn-sm acc" data-act="newprofile">Tạo dữ liệu của tôi</button></div>` : S.fromStatement ? `<div class="banner">${ic('doc')}<div class="grow"><b>Dựng từ sao kê</b> · số liệu tính đến ${FT.dLabel(T())}</div><button class="btn-sm" data-act="resetsample">Về dữ liệu mẫu</button></div>` : '';
 
 /* ---------- TỔNG QUAN ---------- */
 function viewHome() {
-  if (!S.accounts.length) return header() + `<div class="card empty">${ic('wallet')}<h2>Chưa có ví nào</h2><p class="small">Thêm số dư ban đầu, hoặc tải một sao kê để app tự dựng bảng điều khiển.</p><button class="btn" data-act="onboard">Thiết lập trong 3 phút</button><button class="btn ghost" data-act="demoboot">${ic('doc')} Dựng từ sao kê mẫu</button></div>`;
+  if (!S.accounts.length) return header() + `<div class="card empty">${ic('wallet')}<h2>Chưa có ví nào</h2><p class="small">Bắt đầu hồ sơ của bạn bằng một trong các cách sau.</p><button class="btn" data-act="onboard">${ic('edit')} Nhập thông tin trong 3 phút</button><button class="btn ghost" data-act="addmode" data-id="file">${ic('upload')} Tải sao kê của tôi</button><button class="linkbtn" data-act="addacc">Tự thêm từng ví</button>${PR.list.length > 1 ? `<button class="linkbtn" data-act="profiles">Chuyển sang hồ sơ khác</button>` : ''}</div>`;
   const M = FT.model(S), Sx = FT.safeToSpend(S, M), f = M.f, H = FT.health(S), A = FT.alerts2(S);
   const ms = FT.monthSummary(S, f.mk, f.d), prev = FT.monthSummary(S, FT.shiftM(f.mk, -1), f.d);
   const status = Sx.atPace < 0 ? ['bad', 'Nguy cơ thiếu tiền'] : Sx.atPace < Sx.pace * 3 ? ['warn', 'Cần chú ý'] : ['good', 'An toàn'];
   const usedPct = Sx.safe > 0 ? Math.min(100, Sx.spentToday / Sx.safe * 100) : (Sx.spentToday ? 100 : 0);
   const rate = ms.rate, spendDiff = ms.spend - prev.spend;
-  return header() + `<div class="stack">${sampleBanner()}
+  return header() + `<div class="stack">${sampleBanner()}${startCard()}
   <section class="hero" aria-label="Safe-to-Spend hôm nay">
     <div class="row between"><span class="eyebrow">Hôm nay bạn có thể tiêu tối đa</span><span class="pill ${status[0]}">${status[1]}</span></div>
     <div class="big num">${money(Sx.safe)}</div>
@@ -126,6 +157,13 @@ function viewHome() {
   <section class="card"><div class="card-h"><h2>Thu – chi 4 tháng</h2><div class="twin-legend"><span><i style="border-color:var(--good)"></i>Thu</span><span><i style="border-color:var(--bad)"></i>Chi</span></div></div>${ieChart()}</section>
   <button class="card row" data-act="report" style="text-align:left;width:100%"><span class="cico" style="background:var(--accent-soft);color:var(--accent)">${ic('chart')}</span><div class="grow"><div style="font-weight:600">Báo cáo tuần & tháng</div><div class="small muted">Nhóm chi nhiều nhất, so sánh, 3 việc nên làm</div></div>${ic('arrow')}</button>
   </div>`;
+}
+function startCard() {
+  if (S.sample || S.fromStatement || S.txns.length >= 10 || S.settings.hideStart) return '';
+  const steps = [[S.accounts.length > 0, 'Thiết lập ví, thu nhập, khoản cố định', 'onboard'], [S.txns.length > 0, 'Ghi khoản chi đầu tiên (gõ như nhắn tin)', 'add'], [S.txns.length >= 30, 'Tải sao kê 1–3 tháng gần nhất để dự báo chính xác hơn', 'addmode'], [!!(S.plan && S.plan.active), 'Lập kế hoạch tiết kiệm với AI Coach', 'goplan']];
+  return `<section class="card"><div class="card-h"><h2>Bắt đầu với Financial Twin</h2><button class="linkbtn" data-act="hidestart">Ẩn</button></div>
+    ${steps.map(([done, t, act], i) => `<div class="li ${done ? '' : 'tap'}" ${done ? '' : `data-act="${act}" ${act === 'addmode' ? 'data-id="file"' : act === 'goplan' ? 'data-id="coach"' : ''}`}><span class="cico" style="background:${done ? 'var(--good-soft)' : 'var(--surface-2)'};color:${done ? 'var(--good)' : 'var(--muted)'}">${done ? ic('check') : `<b>${i + 1}</b>`}</span><div class="main"><div class="t" style="${done ? 'text-decoration:line-through;color:var(--muted)' : ''}">${t}</div></div>${done ? '' : ic('chev', 'chev')}</div>`).join('')}
+    <p class="small muted" style="margin:6px 0 0">Chưa có lịch sử chi tiêu, app tạm dự báo theo ngân sách bạn đặt. Càng ghi nhiều, dự báo càng sát.</p></section>`;
 }
 function gauge(v, sev) {
   const r = 36, c = 2 * Math.PI * r, col = sev === 'good' ? 'var(--good)' : sev === 'warn' ? 'var(--warn)' : 'var(--bad)';
@@ -594,10 +632,10 @@ function renderAdd() {
       <div class="grid2"><button class="btn ghost" data-act="sampleimg" data-id="receipt">Hóa đơn mẫu</button><button class="btn ghost" data-act="sampleimg" data-id="statement">Ảnh giao dịch mẫu</button></div>`;
   else if (addMode === 'file') body += `<div class="drop" id="drop">${ic('upload')}<b>Tải sao kê PDF, file CSV hoặc Excel</b><span class="small muted">App đọc từng dòng, che số tài khoản, phát hiện giao dịch trùng, tự phân loại và đánh dấu dòng cần xem lại.</span>
       <label class="btn" style="cursor:pointer">${ic('upload')} Chọn file<input type="file" id="filein" accept=".pdf,.csv,.xlsx,.xls,.txt,application/pdf,text/csv" hidden></label></div>
-      ${S.accounts.length ? `<label class="f">Ghi vào ví<select class="in" id="impacc">${accOpts((S.accounts.find(a => a.type === 'bank') || S.accounts[0]).id)}</select></label>` : ''}
+      ${S.sample ? `<div class="note row" style="align-items:flex-start">${ic('bulb')}<span>Bạn đang xem dữ liệu mẫu. Sao kê bạn tải lên sẽ <b>dựng bảng điều khiển mới từ dữ liệu của bạn</b>, thay cho dữ liệu mẫu.</span></div>` : S.accounts.length ? `<label class="f">Ghi vào ví<select class="in" id="impacc">${accOpts((S.accounts.find(a => a.type === 'bank') || S.accounts[0]).id)}</select></label>` : ''}
       <section class="card stack" style="gap:8px"><b>Thử ngay với dữ liệu mẫu</b>
         <button class="btn block" data-act="demoboot">${ic('bolt')} Demo: dựng bảng điều khiển từ sao kê 3 tháng</button>
-        ${S.accounts.length ? `<button class="btn ghost block" data-act="sampleweek">Nhập sao kê mẫu 7 ngày (có giao dịch trùng)</button>` : ''}
+        ${S.accounts.length && !S.sample ? `<button class="btn ghost block" data-act="sampleweek">Nhập sao kê mẫu 7 ngày (có giao dịch trùng)</button>` : ''}
         <button class="btn ghost block" data-act="dlsample">${ic('download')} Tải file sao kê mẫu (CSV)</button></section>`;
   else { quick.account = quick.account && S.accounts.some(a => a.id === quick.account) ? quick.account : (S.accounts.find(a => a.type === 'cash') || S.accounts[0]).id;
     body += `<div style="display:flex;justify-content:center"><div class="typeseg">${[['expense', 'Chi'], ['income', 'Thu']].map(([k, v]) => `<button class="${quick.type === k ? 'on' : ''}" data-act="qtype" data-id="${k}">${v}</button>`).join('')}</div></div>
@@ -751,14 +789,14 @@ async function readFile(file) {
       const out = FT.tableToRows(table, baseForImport()); rows = out.rows; opening = out.opening; info = `${table.length} dòng`;
     } else {
       const text = await file.text(); masked = FT.maskSensitive(text).count;
-      if (FT.looksLikeNotification(text) && !/,|;|\t/.test(text.split('\n')[0])) { rows = FT.parseNotification(text, baseForImport()); info = 'thông báo'; }
-      else { const table = FT.parseCSV(text); const out = FT.tableToRows(table, baseForImport()); rows = out.rows; opening = out.opening; info = `${table.length} dòng`; }
+      const table = FT.parseCSV(text); const out = FT.tableToRows(table, baseForImport()); rows = out.rows; opening = out.opening; info = `${table.length} dòng`;
+      if (!rows.length && FT.looksLikeNotification(text)) { rows = FT.parseNotification(text, baseForImport()); opening = null; info = 'thông báo'; }
     }
     if (!rows.length) { toast('Không tìm thấy giao dịch nào. Kiểm tra file có cột ngày và số tiền.'); return; }
-    startImport(rows, { opening, masked, info, accountId: accId, boot: !S.accounts.length, source: file.name });
+    startImport(rows, { opening, masked, info, accountId: accId, boot: !S.accounts.length || !!S.sample, source: file.name });
   } catch (e) { console.warn(e); toast(/load/.test(String(e && e.message)) ? 'Không tải được bộ đọc file. Hãy lưu file dạng CSV rồi thử lại.' : 'Chưa đọc được file này. Thử lưu dạng CSV.'); }
 }
-const baseForImport = () => S.accounts.length ? S : { ...FT.emptyState(), today: FT.realToday() };
+const baseForImport = () => S.accounts.length && !S.sample ? S : { ...FT.emptyState(), today: FT.realToday() };
 function startImport(rows, o) {
   const base = o.boot ? { ...FT.emptyState(), today: FT.realToday() } : S;
   const accountId = o.accountId || (S.accounts.find(a => a.type === 'bank') || S.accounts[0] || { id: 'bank' }).id;
@@ -792,8 +830,9 @@ function saveImport() {
   const I = imp; const sel = I.drafts.filter(d => d.sel);
   if (!sel.length) { toast('Chưa chọn giao dịch nào.'); return; }
   if (I.boot) {
-    const st = FT.bootstrapFromRows(sel, I.opening || 0, S);
-    st.settings = { ...st.settings, buffer: 500000 }; st.aiLog = S ? S.aiLog : [];
+    const base0 = S; const st = FT.bootstrapFromRows(sel, I.opening || 0, base0);
+    if (base0 && (base0.sample || base0.accounts.length)) createProfile();
+    st.settings = { ...st.settings, buffer: 500000, pinOn: false }; st.aiLog = base0 ? base0.aiLog : [];
     S = st; fixState(); imp = null; changed(); save(); closeSheet(); tab = 'home'; render();
     toast(`Đã dựng xong từ ${sel.length} giao dịch: phát hiện ${S.bills.length} khoản định kỳ, gợi ý ${Object.keys(S.budgets).length} ngân sách.`); return;
   }
@@ -863,7 +902,8 @@ function openBillEdit(id, preset) {
 /* ---------- Cài đặt, quyền riêng tư ---------- */
 function openSettings() {
   const bal = FT.balances(S);
-  sheet('Cài đặt', `<section class="card"><div class="card-h"><h2>Ví và số dư</h2><button class="btn-sm" data-act="addacc">${ic('plus')} Thêm ví</button></div>
+  sheet('Cài đặt', `<section class="card"><div class="card-h"><h2>Hồ sơ</h2><button class="btn-sm" data-act="profiles">Đổi hồ sơ</button></div><div class="row"><span class="cico" style="background:var(--accent-soft);color:var(--accent)">${ic(S.sample ? 'spark' : 'coach')}</span><div class="grow"><b>${esc(curProfile().name)}</b><div class="small muted">${PR.list.length} hồ sơ trên thiết bị này</div></div><button class="btn-sm acc" data-act="newprofile">${ic('plus')} Tạo mới</button></div></section>
+  <section class="card"><div class="card-h"><h2>Ví và số dư</h2><button class="btn-sm" data-act="addacc">${ic('plus')} Thêm ví</button></div>
     ${S.accounts.map(a => `<div class="li"><span class="cico" style="background:var(--accent-soft);color:var(--accent)">${ic(a.type === 'credit' ? 'card' : a.type === 'cash' ? 'wallet' : a.type === 'ewallet' ? 'spark' : 'home')}</span><div class="main"><div class="t">${esc(a.name)}</div><div class="s">${a.type === 'credit' ? 'Dư nợ hiện tại ' + FT.vnd(Math.max(0, -(bal[a.id] || 0))) : 'Số dư hiện tại ' + FT.vnd(bal[a.id] || 0)}</div></div><button class="btn-sm" data-act="editacc" data-id="${a.id}">Sửa</button></div>`).join('')}
     <div class="field-row" style="margin-top:10px"><span class="small"><b>Dự phòng tối thiểu</b><br><span class="muted">Luôn giữ trong tài khoản khi tính Safe-to-Spend</span></span><input class="in num" id="set_buffer" value="${fmtIn(S.settings.buffer)}" inputmode="numeric" aria-label="Dự phòng tối thiểu"></div>
     <p class="small muted" style="margin:8px 0 0">Bản dự thi chưa kết nối ngân hàng. Số dư ban đầu do bạn nhập, giao dịch sau đó tự cộng trừ.</p></section>
@@ -875,11 +915,23 @@ function openSettings() {
     <div class="note" style="margin-top:8px;display:grid;gap:4px"><span>• Không yêu cầu và không lưu mật khẩu ngân hàng.</span><span>• Số tài khoản, số thẻ trong văn bản được tự động che trước khi gửi AI. Với ảnh, bạn tô đen vùng nhạy cảm trước khi gửi.</span><span>• AI chỉ đọc kết quả tính toán; không có quyền ghi dữ liệu hay chuyển tiền.</span><span>• Mọi con số do bộ máy tính toán xác định; app kiểm tra số trong câu trả lời của AI.</span><span>• Dữ liệu AI đọc từ ảnh, sao kê luôn chờ bạn xác nhận trước khi lưu.</span></div></section>
   <section class="card"><div class="card-h"><h2>Dữ liệu</h2></div><div class="stack" style="gap:8px">
     <div class="grid2"><button class="btn ghost" data-act="export" data-id="csv">${ic('download')} Xuất CSV</button><button class="btn ghost" data-act="export" data-id="json">${ic('download')} Xuất JSON</button></div>
-    <button class="btn ghost" data-act="onboard">Bắt đầu với dữ liệu của tôi</button>
-    <button class="btn ghost" data-act="demoboot">Dựng từ sao kê mẫu</button>
-    <button class="btn ghost" data-act="resetsample">Nạp lại dữ liệu mẫu</button>
-    <button class="btn danger" data-act="wipe">${confirmDel === 'wipe' ? 'Bấm lần nữa để xóa vĩnh viễn' : 'Xóa toàn bộ dữ liệu'}</button></div></section>
+    <button class="btn ghost" data-act="newprofile">${S.sample ? 'Tạo hồ sơ và nhập dữ liệu của tôi' : 'Tạo hồ sơ mới (người khác hoặc làm lại từ đầu)'}</button>
+    <button class="btn ghost" data-act="demoboot">Thử dựng từ sao kê mẫu</button>
+    <button class="btn ghost" data-act="resetsample">${S.sample ? 'Nạp lại dữ liệu mẫu' : 'Xem dữ liệu mẫu'}</button>
+    <button class="btn danger" data-act="wipe">${confirmDel === 'wipe' ? 'Bấm lần nữa để xóa vĩnh viễn' : 'Xóa toàn bộ dữ liệu của hồ sơ này'}</button></div></section>
   <p class="small muted" style="text-align:center;margin:0">Financial Twin · bản dự thi ${new Date().getFullYear()}</p>`, '', { full: true });
+}
+function openProfiles() {
+  sheet('Hồ sơ', `<p class="small muted" style="margin:0">Mỗi hồ sơ là một bộ dữ liệu riêng trên thiết bị này. Dữ liệu mẫu luôn được giữ để trình diễn.</p>
+    <div class="card" style="padding:4px 14px">${PR.list.map(p => `<div class="li tap" data-act="switchprofile" data-id="${p.id}"><span class="cico" style="background:${p.id === PR.active ? 'var(--accent-soft)' : 'var(--surface-2)'};color:${p.id === PR.active ? 'var(--accent)' : 'var(--muted)'}">${ic(p.sample ? 'spark' : 'coach')}</span><div class="main"><div class="t">${esc(p.name)}</div><div class="s">${p.sample ? 'Dữ liệu mô phỏng' : lsGet(skey(p.id))?.enc ? 'Có mã PIN, dữ liệu mã hóa' : 'Dữ liệu cá nhân'}</div></div>${p.id === PR.active ? '<span class="pill good">Đang dùng</span>' : ic('chev', 'chev')}</div>`).join('')}</div>
+    <button class="btn block" data-act="newprofile">${ic('plus')} Tạo hồ sơ mới</button>
+    ${PR.list.length > 1 ? `<button class="btn danger block" data-act="delprofile">${confirmDel === 'delprofile' ? `Bấm lần nữa để xóa hồ sơ “${esc(curProfile().name)}”` : `Xóa hồ sơ đang dùng`}</button>` : ''}`, '', { full: false });
+}
+function openNewProfile() {
+  sheet('Tạo hồ sơ mới', `<p class="small muted" style="margin:0">Dữ liệu cũ vẫn được giữ, bạn chuyển qua lại giữa các hồ sơ bất cứ lúc nào.</p>
+    <button class="card row" data-act="np" data-id="manual" style="text-align:left;width:100%"><span class="cico" style="background:var(--accent-soft);color:var(--accent)">${ic('edit')}</span><div class="grow"><b>Nhập thông tin trong 3 phút</b><div class="small muted">Thu nhập, số dư từng ví, khoản cố định, trả góp, ngân sách, quỹ đang có, mục tiêu.</div></div>${ic('chev', 'chev')}</button>
+    <button class="card row" data-act="np" data-id="statement" style="text-align:left;width:100%"><span class="cico" style="background:var(--twin-soft);color:var(--twin)">${ic('upload')}</span><div class="grow"><b>Tải sao kê ngân hàng</b><div class="small muted">PDF, CSV hoặc Excel 1–3 tháng. App tự nhận lương, hóa đơn, gợi ý ngân sách.</div></div>${ic('chev', 'chev')}</button>
+    <button class="card row" data-act="np" data-id="blank" style="text-align:left;width:100%"><span class="cico" style="background:var(--surface-2);color:var(--muted)">${ic('plus')}</span><div class="grow"><b>Bắt đầu trống</b><div class="small muted">Tự thêm ví và giao dịch sau.</div></div>${ic('chev', 'chev')}</button>`, '');
 }
 function openAiLog() {
   sheet('Dữ liệu đã gửi cho AI', `<p class="small muted" style="margin:0">Mỗi lần app gọi AI, nội dung gửi đi được ghi lại tại đây. Số tài khoản đã được che. Nhật ký chỉ lưu trên thiết bị này.</p>
@@ -907,26 +959,32 @@ function doExport(kind) {
 let ob = null;
 function openOnboard() {
   ob = { step: 1, name: '', payday: 5, income: 0, accounts: [['Tiền mặt', 'cash', 0], ['Tài khoản ngân hàng', 'bank', 0], ['Ví điện tử', 'ewallet', 0], ['Thẻ tín dụng (dư nợ)', 'credit', 0]],
-    bills: [['Tiền nhà', 'bill', 'nha-o', 0, 5], ['Điện nước', 'bill', 'nha-o', 0, 15], ['Internet', 'bill', 'nha-o', 0, 10], ['Học phí', 'bill', 'hoc-tap', 0, 5], ['Trả góp / khoản vay', 'loan', 'no', 0, 25], ['Netflix / Spotify', 'sub', 'giai-tri', 0, 12], ['Chuyển tiết kiệm', 'saving', 'tiet-kiem', 0, 6]], budgets: null };
+    bills: [['Tiền nhà', 'bill', 'nha-o', 0, 5], ['Điện nước', 'bill', 'nha-o', 0, 15], ['Internet', 'bill', 'nha-o', 0, 10], ['Học phí', 'bill', 'hoc-tap', 0, 5], ['Trả góp / khoản vay', 'loan', 'no', 0, 25, 12], ['Netflix / Spotify', 'sub', 'giai-tri', 0, 12], ['Chuyển tiết kiệm', 'saving', 'tiet-kiem', 0, 6]], budgets: null, reserve: 0, goal: { name: '', target: 0, months: 12 } };
   renderOnboard();
 }
 function obRead() {
   const q = id => document.getElementById(id);
   if (ob.step === 1) { ob.name = q('o_name').value.trim(); ob.payday = Math.min(31, Math.max(1, Number(q('o_payday').value) || 5)); ob.income = parseMoney(q('o_income').value); }
   if (ob.step === 2) ob.accounts.forEach((a, i) => { a[0] = q('o_an' + i).value.trim() || a[0]; a[2] = parseMoney(q('o_ab' + i).value); });
-  if (ob.step === 3) ob.bills.forEach((b, i) => { b[3] = parseMoney(q('o_bm' + i).value); b[4] = Math.min(31, Math.max(1, Number(q('o_bd' + i).value) || b[4])); });
+  if (ob.step === 3) ob.bills.forEach((b, i) => { b[3] = parseMoney(q('o_bm' + i).value); b[4] = Math.min(31, Math.max(1, Number(q('o_bd' + i).value) || b[4])); if (b[1] === 'loan' && q('o_bl' + i)) b[5] = Math.max(1, Number(q('o_bl' + i).value) || 12); });
   if (ob.step === 4) Object.keys(ob.budgets).forEach(c => ob.budgets[c] = parseMoney(q('o_bg' + c).value));
+  if (ob.step === 5) { ob.reserve = parseMoney(q('o_res').value); ob.goal = { name: q('o_gn').value.trim(), target: parseMoney(q('o_gt').value), months: Math.max(1, Number(q('o_gm').value) || 12) }; }
 }
 function renderOnboard() {
-  const st = ob.step; let body = `<div class="steps">${[1, 2, 3, 4].map(i => `<i class="${i <= st ? 'on' : ''}"></i>`).join('')}</div>`;
-  if (st === 1) body += `<h2>Bắt đầu trong 3 phút</h2><p class="muted small" style="margin:0">Chỉ cần số liệu gần đúng. Có thể sửa bất cứ lúc nào. Muốn nhanh hơn? <button class="linkbtn" data-act="demoboot">Tải sao kê để app tự dựng</button>.</p>
+  const st = ob.step; let body = `<div class="steps">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= st ? 'on' : ''}"></i>`).join('')}</div>`;
+  if (st === 1) body += `<h2>Bắt đầu trong 3 phút</h2><p class="muted small" style="margin:0">Chỉ cần số liệu gần đúng. Có thể sửa bất cứ lúc nào. Muốn nhanh hơn? <button class="linkbtn" data-act="addmode" data-id="file">Tải sao kê để app tự dựng</button>.</p>
     <label class="f">Tên của bạn<input class="in" id="o_name" value="${esc(ob.name)}" placeholder="Minh"></label>
     <div class="grid2"><label class="f">Thu nhập mỗi tháng<input class="in num" id="o_income" inputmode="numeric" value="${fmtIn(ob.income)}" placeholder="15.000.000"></label><label class="f">Ngày nhận lương<input class="in" id="o_payday" type="number" min="1" max="31" value="${ob.payday}"></label></div>`;
   if (st === 2) body += `<h2>Bạn đang có bao nhiêu tiền?</h2><p class="muted small" style="margin:0">Nhập số dư hôm nay của từng ví. Bỏ trống ví không dùng.</p>` + ob.accounts.map((a, i) => `<div class="grid2"><label class="f">Tên ví<input class="in" id="o_an${i}" value="${esc(a[0])}"></label><label class="f">${a[1] === 'credit' ? 'Dư nợ' : 'Số dư'}<input class="in num" id="o_ab${i}" inputmode="numeric" value="${fmtIn(a[2])}" placeholder="0"></label></div>`).join('');
-  if (st === 3) body += `<h2>Các khoản cố định mỗi tháng</h2><p class="muted small" style="margin:0">Nhập số tiền và ngày. Bỏ trống khoản không có.</p>` + ob.bills.map((b, i) => `<div class="row">${catIco(b[2])}<span class="grow" style="font-weight:600;font-size:14px">${b[0]}</span><input class="in num" style="max-width:120px;text-align:right" id="o_bm${i}" inputmode="numeric" value="${fmtIn(b[3])}" placeholder="0"><input class="in" style="max-width:64px" id="o_bd${i}" type="number" min="1" max="31" value="${b[4]}" aria-label="Ngày"></div>`).join('');
+  if (st === 3) body += `<h2>Các khoản cố định mỗi tháng</h2><p class="muted small" style="margin:0">Nhập số tiền và ngày. Bỏ trống khoản không có.</p>` + ob.bills.map((b, i) => `<div class="row">${catIco(b[2])}<span class="grow" style="font-weight:600;font-size:14px">${b[0]}</span><input class="in num" style="max-width:120px;text-align:right" id="o_bm${i}" inputmode="numeric" value="${fmtIn(b[3])}" placeholder="0"><input class="in" style="max-width:64px" id="o_bd${i}" type="number" min="1" max="31" value="${b[4]}" aria-label="Ngày"></div>${b[1] === 'loan' ? `<div class="row small muted" style="justify-content:flex-end;gap:6px;margin-top:-4px">còn <input class="in" style="max-width:64px" id="o_bl${i}" type="number" min="1" max="360" value="${b[5] || 12}" aria-label="Số kỳ còn lại"> kỳ</div>` : ''}`).join('');
   if (st === 4) { if (!ob.budgets) { const fixed = FT.sum(ob.bills.map(b => b[3])); const flex = Math.max(0, ob.income - fixed); const r = x => Math.round(flex * x / 100000) * 100000; ob.budgets = { 'an-uong': r(.38), 'di-lai': r(.12), 'mua-sam': r(.14), 'giai-tri': r(.08), 'suc-khoe': r(.06) }; }
     body += `<h2>Ngân sách gợi ý</h2><p class="muted small" style="margin:0">Chia phần còn lại sau khoản cố định, giữ khoảng 20% làm quỹ dự phòng.</p>` + Object.entries(ob.budgets).map(([c, v]) => `<label class="row">${catIco(c)}<span class="grow" style="font-weight:600">${FT.catOf(c).name}</span><input class="in num" style="max-width:150px;text-align:right" id="o_bg${c}" inputmode="numeric" value="${fmtIn(v)}"></label>`).join(''); }
-  sheet('Thiết lập', body, `${st > 1 ? `<button class="btn ghost" data-act="obback" aria-label="Quay lại">${ic('back')}</button>` : ''}<button class="btn block" data-act="obnext">${st < 4 ? 'Tiếp tục' : 'Hoàn tất'}</button>`, { full: true });
+  if (st === 5) { const G = ob.goal; body += `<h2>Quỹ và mục tiêu</h2><p class="muted small" style="margin:0">Tiền dự phòng bạn đang để riêng (gửi tiết kiệm, quỹ khẩn cấp) và một mục tiêu muốn đạt. Bỏ trống nếu chưa có.</p>
+    <label class="f">Quỹ dự phòng đang có<input class="in num" id="o_res" inputmode="numeric" value="${fmtIn(ob.reserve)}" placeholder="0"></label>
+    <div class="chips">${['Mua laptop', 'Du lịch', 'Mua xe', 'Học thêm', 'Đám cưới'].map(n => `<button class="chip ${G.name === n ? 'on' : ''}" data-act="obgoal" data-id="${n}">${n}</button>`).join('')}</div>
+    <label class="f">Tên mục tiêu<input class="in" id="o_gn" value="${esc(G.name)}" placeholder="Ví dụ: Mua laptop"></label>
+    <div class="grid2"><label class="f">Số tiền cần<input class="in num" id="o_gt" inputmode="numeric" value="${fmtIn(G.target)}" placeholder="20.000.000"></label><label class="f">Trong bao nhiêu tháng<input class="in" id="o_gm" type="number" min="1" max="120" value="${G.months}"></label></div>`; }
+  sheet('Thiết lập hồ sơ', body, `${st > 1 ? `<button class="btn ghost" data-act="obback" aria-label="Quay lại">${ic('back')}</button>` : ''}<button class="btn block" data-act="obnext">${st < 5 ? 'Tiếp tục' : 'Hoàn tất'}</button>`, { full: true });
 }
 function finishOnboard() {
   const st = FT.emptyState(); st.v = 2; st.profile = { name: ob.name, payday: ob.payday };
@@ -935,11 +993,14 @@ function finishOnboard() {
   const gid = 'g' + FT.uid();
   if (ob.income > 0) st.bills.push({ id: 'b' + FT.uid(), name: 'Lương', amount: ob.income, day: ob.payday, kind: 'income', cat: 'luong', account: 'bank' });
   const sv = ob.bills.find(b => b[1] === 'saving' && b[3] > 0);
-  ob.bills.filter(b => b[3] > 0).forEach(b => st.bills.push({ id: 'b' + FT.uid(), name: b[0], amount: b[3], day: b[4], kind: b[1], cat: b[2], account: b[2] === 'giai-tri' && st.accounts.some(a => a.id === 'card') ? 'card' : 'bank', ...(b[1] === 'saving' ? { goalId: gid } : {}) }));
+  ob.bills.filter(b => b[3] > 0).forEach(b => st.bills.push({ id: 'b' + FT.uid(), name: b[0], amount: b[3], day: b[4], kind: b[1], cat: b[2], account: b[2] === 'giai-tri' && st.accounts.some(a => a.id === 'card') ? 'card' : 'bank', ...(b[1] === 'saving' ? { goalId: gid } : {}), ...(b[1] === 'loan' ? { monthsLeft: b[5] || 12 } : {}) }));
   st.budgets = { ...ob.budgets }; if (sv) st.budgets['tiet-kiem'] = sv[3];
-  st.goals = [{ id: gid, name: 'Quỹ khẩn cấp', target: Math.max(ob.income * 3, 10000000), saved: 0, deadline: FT.shiftM(FT.mkey(FT.realToday()), 12) + '-28', monthly: sv ? sv[3] : 0, emergency: true }];
+  const burn = FT.sum(ob.bills.filter(b => b[1] !== 'saving').map(b => b[3])) + FT.sum(Object.values(ob.budgets || {}));
+  const r10 = x => Math.round(x / 1e6) * 1e6;
+  st.goals = [{ id: gid, name: 'Quỹ khẩn cấp', target: Math.max(r10(burn * 3), r10(ob.reserve + 5e6), 10000000), saved: ob.reserve || 0, deadline: FT.shiftM(FT.mkey(FT.realToday()), 12) + '-28', monthly: sv ? sv[3] : 0, emergency: true }];
+  const G = ob.goal; if (G && G.target > 0) st.goals.push({ id: 'g' + FT.uid(), name: G.name || 'Mục tiêu của tôi', target: G.target, saved: 0, deadline: FT.shiftM(FT.mkey(FT.realToday()), G.months) + '-28', monthly: Math.ceil(G.target / G.months / 10000) * 10000 });
   st.settings = { hide: false, buffer: 500000, pinOn: S.settings.pinOn }; st.aiLog = S.aiLog; st.plan = null;
-  S = st; ob = null; chat = []; changed(); save(); closeSheet(); tab = 'home'; render(); toast('Đã thiết lập xong. Bấm + để ghi khoản chi đầu tiên.');
+  S = st; fixState(); ob = null; chat = []; changed(); save(); closeSheet(); tab = 'home'; render(); toast(`Đã tạo hồ sơ${st.profile.name ? ' của ' + st.profile.name : ''}. Bấm + để ghi khoản chi đầu tiên.`);
 }
 
 /* ---------- PIN / khóa ---------- */
@@ -951,7 +1012,7 @@ function drawLock(err) {
   L.innerHTML = `<div style="text-align:center"><div class="mark" style="margin:0 auto 14px;width:52px;height:52px;border-radius:16px;background:var(--hero-2)">${ic('lock')}</div><h2 style="font-size:20px">${title}</h2><div style="color:${err ? '#FFB3BC' : 'var(--hero-muted)'};font-size:13.5px;min-height:20px">${err || (pinMode === 'unlock' ? 'Dữ liệu đang được mã hóa' : 'Dữ liệu sẽ được mã hóa bằng mã này')}</div>
   <div class="dots">${[0, 1, 2, 3].map(i => `<i class="${i < pinBuf.length ? 'f' : ''}"></i>`).join('')}</div>
   <div class="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-act="pinkey" data-id="${n}">${n}</button>`).join('')}<button data-act="pinkey" data-id="x" style="font-size:14px">${pinMode === 'unlock' ? '' : 'Hủy'}</button><button data-act="pinkey" data-id="0">0</button><button data-act="pinkey" data-id="del" aria-label="Xóa">${ic('back')}</button></div>
-  ${pinMode === 'unlock' ? `<button data-act="forgot" style="margin-top:18px;color:var(--hero-muted);font-size:13px">Quên mã PIN</button>` : ''}</div>`;
+  ${pinMode === 'unlock' ? `<div style="margin-top:6px;color:var(--hero-muted);font-size:13px">${esc(curProfile() ? curProfile().name : '')}</div><button data-act="forgot" style="margin-top:14px;color:var(--hero-muted);font-size:13px">Quên mã PIN</button>${PR.list.length > 1 ? `<button data-act="lockswitch" style="margin-top:14px;margin-left:18px;color:var(--hero-muted);font-size:13px">Đổi hồ sơ</button>` : ''}` : ''}</div>`;
 }
 async function pinKey(k) {
   if (k === 'x') { if (pinMode !== 'unlock') { $('#lock').remove(); openSettings(); } return; }
@@ -1103,15 +1164,27 @@ document.addEventListener('click', async e => {
       const acc = { id: id || 'a' + FT.uid(), name, type, opening: type === 'credit' ? -v : v }; if (id) Object.assign(S.accounts.find(x => x.id === id), acc); else S.accounts.push(acc); save(); changed(); render(); openSettings(); toast('Đã lưu ví'); break; }
     case 'pin': if (S.settings.pinOn) { S.settings.pinOn = false; cryptoKey = null; save(); toast('Đã tắt mã PIN. Dữ liệu không còn mã hóa.'); openSettings(); } else { closeSheet(); pinFirst = ''; showLock('set1'); } break;
     case 'pinkey': pinKey(id); break;
-    case 'forgot': if (confirmDel !== 'forgot') { confirmDel = 'forgot'; el.textContent = 'Dữ liệu đã mã hóa sẽ bị xóa. Bấm lần nữa để bắt đầu lại.'; return; } try { localStorage.removeItem(KEY); } catch (er) {} lockedRaw = null; S = FT.sampleState(sampleToday()); fixState(); $('#lock').remove(); render(); break;
+    case 'forgot': if (confirmDel !== 'forgot') { confirmDel = 'forgot'; el.textContent = 'Dữ liệu đã mã hóa của hồ sơ này sẽ bị xóa. Bấm lần nữa để bắt đầu lại.'; return; } confirmDel = null; lsDel(skey(PR.active)); openProfile(PR.active); $('#lock').remove(); tab = 'home'; render(); break;
+    case 'lockswitch': $('#lock').remove(); if (!S) { S = Object.assign(FT.emptyState(), { v: 2 }); fixState(); } render(); openProfiles(); break;
     case 'ailog': openAiLog(); break;
     case 'clearlog': S.aiLog = []; save(); openAiLog(); break;
     case 'export': doExport(id); break;
-    case 'onboard': openOnboard(); break;
-    case 'obnext': obRead(); if (ob.step === 2 && !ob.accounts.some(x => x[1] !== 'credit' && x[2] > 0)) { toast('Hãy nhập số dư ít nhất một ví.'); return; } if (ob.step < 4) { ob.step++; renderOnboard(); } else finishOnboard(); break;
+    case 'onboard': if (S.sample || S.accounts.length) createProfile(); openOnboard(); break;
+    case 'obgoal': obRead(); ob.goal.name = el.dataset.id; renderOnboard(); break;
+    case 'profiles': confirmDel = null; openProfiles(); break;
+    case 'newprofile': openNewProfile(); break;
+    case 'np': { const m = el.dataset.id; createProfile(); tab = 'home'; render();
+      if (m === 'manual') openOnboard(); else if (m === 'statement') openAdd('file'); else { closeSheet(); openAccEdit(); toast('Đã tạo hồ sơ trống. Thêm ví đầu tiên của bạn.'); } break; }
+    case 'switchprofile': { const id = el.dataset.id; if (id === PR.active) { closeSheet(); break; } closeSheet(); const ok = openProfile(id); tab = 'home'; if (!ok) { S = Object.assign(FT.emptyState(), { v: 2 }); fixState(); render(); showLock('unlock'); } else { render(); toast('Đã chuyển sang ' + curProfile().name); } break; }
+    case 'delprofile': { if (confirmDel !== 'delprofile') { confirmDel = 'delprofile'; openProfiles(); return; } confirmDel = null; const gone = PR.active; lsDel(skey(gone)); PR.list = PR.list.filter(p => p.id !== gone); if (!PR.list.length) PR.list.push({ id: 'p' + FT.uid(), name: 'Dữ liệu mẫu', sample: true }); saveProfiles(); closeSheet(); const ok = openProfile(PR.list[0].id); tab = 'home'; if (!ok) { S = Object.assign(FT.emptyState(), { v: 2 }); fixState(); render(); showLock('unlock'); } else { render(); toast('Đã xóa hồ sơ'); } break; }
+    case 'hidestart': S.settings.hideStart = true; save(); render(); break;
+    case 'obnext': obRead(); if (ob.step === 2 && !ob.accounts.some(x => x[1] !== 'credit' && x[2] > 0)) { toast('Hãy nhập số dư ít nhất một ví.'); return; } if (ob.step < 5) { ob.step++; renderOnboard(); } else finishOnboard(); break;
     case 'obback': obRead(); ob.step--; renderOnboard(); break;
-    case 'resetsample': { const keep = { pinOn: S.settings.pinOn }; S = FT.sampleState(sampleToday()); S.settings.pinOn = keep.pinOn; fixState(); chat = []; changed(); save(); closeSheet(); tab = 'home'; render(); toast('Đã nạp lại dữ liệu mẫu'); break; }
-    case 'wipe': if (confirmDel !== 'wipe') { confirmDel = 'wipe'; el.textContent = 'Bấm lần nữa để xóa vĩnh viễn'; return; } S = FT.emptyState(); S.v = 2; fixState(); cryptoKey = null; try { localStorage.removeItem(KEY); } catch (er) {} confirmDel = null; chat = []; changed(); save(); closeSheet(); tab = 'home'; render(); toast('Đã xóa toàn bộ dữ liệu'); break;
+    case 'resetsample': { closeSheet(); tab = 'home';
+      if (S.sample) { const keep = { pinOn: S.settings.pinOn }; S = FT.sampleState(sampleToday()); S.settings.pinOn = keep.pinOn; fixState(); chat = []; changed(); save(); render(); toast('Đã nạp lại dữ liệu mẫu'); break; }
+      let sp = PR.list.find(p => p.sample); if (!sp) { sp = { id: 'p' + FT.uid(), name: 'Dữ liệu mẫu', sample: true }; PR.list.push(sp); saveProfiles(); }
+      const ok = openProfile(sp.id); if (!ok) { S = Object.assign(FT.emptyState(), { v: 2 }); fixState(); render(); showLock('unlock'); break; } if (!S.sample) { S = FT.sampleState(sampleToday()); fixState(); } save(); render(); toast('Đã chuyển sang dữ liệu mẫu. Hồ sơ của bạn vẫn được giữ.'); break; }
+    case 'wipe': if (confirmDel !== 'wipe') { confirmDel = 'wipe'; el.textContent = 'Bấm lần nữa để xóa vĩnh viễn'; return; } S = FT.emptyState(); S.v = 2; fixState(); cryptoKey = null; cryptoSalt = null; lsDel(skey(PR.active)); confirmDel = null; chat = []; changed(); save(); closeSheet(); tab = 'home'; render(); toast('Đã xóa toàn bộ dữ liệu'); break;
   }
 });
 document.addEventListener('input', e => {
@@ -1140,6 +1213,8 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#layer 
 document.addEventListener('dragover', e => { const d = e.target.closest && e.target.closest('#drop'); if (d) { e.preventDefault(); d.classList.add('over'); } });
 document.addEventListener('drop', e => { const d = e.target.closest && e.target.closest('#drop'); if (!d) return; e.preventDefault(); d.classList.remove('over'); const f = e.dataTransfer.files[0]; if (!f) return; if (addMode === 'file') readFile(f); else if (/^image\//.test(f.type)) startRedact(f); });
 
+loadProfiles();
+openProfile(PR.active);
 render();
 (async () => { try { const s = await window.claude?.use?.('sample'); if (s) { AI = s; const lim = await s.limits().catch(() => null); AIimg = !!(lim && lim.images); AItools = !!(lim && lim.tools); if (S && (tab === 'twin' || tab === 'plan')) render(); } } catch (e) {} })();
 window.__FT_TEST__ = { get S() { return S; }, runTwin, runStress, askChat, startImport, miniPdfLines, readFile };
