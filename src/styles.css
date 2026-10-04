@@ -232,6 +232,32 @@ textarea.in { resize: vertical; min-height: 84px; }
 .ask-box { display: flex; gap: 8px; }
 .ask-box .in { border-radius: 14px; }
 .ask-box .btn { padding: 10px 14px; border-radius: 14px; white-space: nowrap; }
+
+/* Billing / Financial Twin Pro */
+.pro-badge { display:inline-flex;vertical-align:middle;margin-left:5px;padding:2px 6px;border-radius:999px;background:linear-gradient(135deg,#6d5ce7,#9a6af2);color:#fff;font:700 9px/1.4 var(--f-body);letter-spacing:.08em }
+.pro-lock { text-align:center;padding:28px 20px;border:1.5px solid color-mix(in srgb,var(--twin) 38%,transparent);background:linear-gradient(155deg,var(--surface),var(--twin-soft)) }
+.pro-lock .pro-crown { width:48px;height:48px;border-radius:16px;display:grid;place-items:center;margin:0 auto 10px;background:var(--twin-soft);color:var(--twin) }
+.pro-lock .pro-crown .ico { width:25px;height:25px }
+.price-card { padding:18px;border-radius:20px;background:var(--surface);box-shadow:var(--shadow);border:1px solid var(--line) }
+.price-card.featured { border:2px solid var(--twin);background:linear-gradient(160deg,var(--surface),var(--twin-soft)) }
+.price-card h2 { margin:10px 0 4px }
+.price-card p { color:var(--muted);font-size:13px;line-height:1.55 }
+.price-head { display:flex;align-items:center;justify-content:space-between;gap:12px }
+.price-head h2 { font-size:28px;margin:7px 0 0 }
+.price { font:700 28px/1.2 var(--f-display);color:var(--text) }
+.price small { font:500 12px var(--f-body);color:var(--muted) }
+.pro-active { text-align:center;padding:24px;background:linear-gradient(155deg,var(--surface),var(--good-soft));border:1px solid color-mix(in srgb,var(--good) 35%,transparent) }
+.paybox { text-align:center }
+.qr { margin:16px auto;max-width:290px;padding:12px;border-radius:20px;background:#fff;box-shadow:var(--shadow) }
+.qr img { display:block;width:100%;border-radius:12px }
+.pay-info { display:grid;grid-template-columns:1fr 1.4fr;gap:8px 14px;text-align:left;padding:15px;border-radius:16px;background:var(--surface-2);font-size:13px }
+.pay-info span { color:var(--muted) }.pay-info b { text-align:right;word-break:break-word }.order-code { color:var(--twin);letter-spacing:.08em }
+.waiting { display:flex;justify-content:center;align-items:center;gap:8px;margin-top:14px;color:var(--muted);font-size:13px }
+.waiting i { width:9px;height:9px;border-radius:50%;background:var(--warn);animation:pulse 1.2s infinite }
+.spinner { width:28px;height:28px;border:3px solid var(--line);border-top-color:var(--twin);border-radius:50%;animation:spin .8s linear infinite }
+.pay-success { text-align:center;padding:24px 8px }.success-mark { width:70px;height:70px;display:grid;place-items:center;margin:0 auto 14px;border-radius:50%;background:var(--good-soft);color:var(--good);font-size:38px;font-weight:700 }
+@keyframes spin { to { transform:rotate(360deg) } }
+@keyframes pulse { 50% { opacity:.35;transform:scale(.75) } }
 .chips.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
 .chips.scroll::-webkit-scrollbar { display: none; }
 .chips.scroll .chip { white-space: nowrap; }

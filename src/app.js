@@ -89,13 +89,61 @@ const fmtIn = n => n ? Math.round(n).toLocaleString('vi-VN') : '';
 const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
 const changed = () => { twinRes = null; stressRes = null; };
 
+/* ---------- gói dịch vụ + SePay ---------- */
+const BILL_KEY = 'financial-twin-billing-v1';
+let billing = lsGet(BILL_KEY) || { pro: false, plan: null, proDen: null, usageMonth: '', twinUses: 0 };
+let payOrder = null, payTimer = null;
+function deviceId() {
+  let id = ''; try { id = localStorage.getItem('financial-twin-device-id') || ''; } catch (e) {}
+  if (!/^[a-f0-9-]{20,80}$/i.test(id)) { id = crypto.randomUUID(); try { localStorage.setItem('financial-twin-device-id', id); } catch (e) {} }
+  return id;
+}
+const saveBilling = () => lsSet(BILL_KEY, billing);
+const isPro = () => !!billing.pro && !!billing.proDen && new Date(billing.proDen) > new Date();
+const usageMonth = () => new Date().toISOString().slice(0, 7);
+function normalizeUsage() { if (billing.usageMonth !== usageMonth()) { billing.usageMonth = usageMonth(); billing.twinUses = 0; saveBilling(); } }
+const twinLeft = () => { normalizeUsage(); return Math.max(0, 3 - Number(billing.twinUses || 0)); };
+async function refreshEntitlement(quiet = true) {
+  try { const r = await fetch(`/api/entitlement?deviceId=${encodeURIComponent(deviceId())}`, { cache: 'no-store' }); if (!r.ok) return; const x = await r.json(); billing.pro = !!x.pro; billing.plan = x.plan || null; billing.proDen = x.proDen || null; saveBilling(); if (!quiet) render(); } catch (e) {}
+}
+function proLock(title, detail) {
+  return `<section class="card pro-lock"><span class="pro-crown">${ic('star')}</span><h2>${esc(title)}</h2><p class="small muted">${esc(detail)}</p><button class="btn block" data-act="pricing">Xem gói Pro</button></section>`;
+}
+function useTwin(q, sc) {
+  if (!isPro()) { normalizeUsage(); if (billing.twinUses >= 3) { openPricing('Bạn đã dùng hết 3 lượt mô phỏng miễn phí trong tháng.'); return; } billing.twinUses++; saveBilling(); }
+  runTwin(q, sc);
+}
+function openPricing(note = '') {
+  const active = isPro();
+  sheet('Gói Financial Twin', `${note ? `<div class="note">${esc(note)}</div>` : ''}
+    ${active ? `<section class="card pro-active"><span class="pill good">PRO đang hoạt động</span><h2>${billing.plan === 'pro_yearly' ? 'Pro theo năm' : 'Pro theo tháng'}</h2><p class="small muted">Dùng đầy đủ đến ${new Date(billing.proDen).toLocaleDateString('vi-VN')}.</p></section>` : `<section class="price-card"><div class="price-head"><div><span class="pill neutral">MIỄN PHÍ</span><h2>0đ</h2></div><b>${twinLeft()}/3 lượt Twin còn lại</b></div><p>Ghi chép, Safe-to-Spend, cảnh báo cơ bản và 3 lần mô phỏng mỗi tháng.</p></section>
+    <section class="price-card featured"><div class="row between"><span class="pill good">PHỔ BIẾN</span><span class="small">30 ngày</span></div><h2>Pro theo tháng</h2><div class="price">79.000đ <small>/ tháng</small></div><p>Mở toàn bộ Twin, Stress Test, AI Coach, chatbot AI, PDF/Excel và báo cáo.</p><button class="btn block" data-act="buy" data-id="pro_monthly">Chọn gói tháng</button></section>
+    <section class="price-card"><div class="row between"><span class="pill warn">TIẾT KIỆM 27%</span><span class="small">365 ngày</span></div><h2>Pro theo năm</h2><div class="price">690.000đ <small>/ năm</small></div><p>Tương đương khoảng 57.500đ/tháng, tiết kiệm 258.000đ so với trả từng tháng.</p><button class="btn block" data-act="buy" data-id="pro_yearly">Chọn gói năm</button></section>`}
+    <p class="small muted" style="text-align:center">Thanh toán chuyển khoản VietQR qua SePay. Hệ thống tự kích hoạt Pro sau khi ngân hàng báo có.</p>`, '', { full: true });
+}
+async function createPayment(plan) {
+  sheet('Thanh toán', '<div class="empty"><span class="spinner"></span><b>Đang tạo đơn thanh toán…</b></div>', '', { full: true });
+  try {
+    const r = await fetch('/api/create-order', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plan, deviceId: deviceId() }) });
+    const x = await r.json(); if (!r.ok) throw new Error(x.error || 'Không tạo được đơn.'); payOrder = x; renderPayment(); pollPayment();
+  } catch (e) { sheet('Thanh toán', `<div class="empty"><b>Chưa tạo được đơn</b><p class="small muted">${esc(e.message)}</p><button class="btn" data-act="pricing">Quay lại bảng giá</button></div>`, '', { full: true }); }
+}
+function renderPayment(paid = false) {
+  if (!payOrder) return;
+  if (paid) { sheet('Thanh toán thành công', `<div class="pay-success"><div class="success-mark">✓</div><h2>Financial Twin Pro đã được kích hoạt</h2><p>Dùng đầy đủ tính năng đến <b>${new Date(billing.proDen).toLocaleDateString('vi-VN')}</b>.</p><button class="btn block" data-act="close">Bắt đầu sử dụng Pro</button></div>`, '', { full: true }); return; }
+  sheet('Thanh toán Pro', `<div class="paybox"><div class="price">${FT.vnd(payOrder.soTienVnd)}</div><p class="small muted">${esc(payOrder.tenGoi)}</p><div class="qr"><img src="${esc(payOrder.qrUrl)}" alt="Mã VietQR thanh toán ${esc(payOrder.maDon)}"></div><div class="pay-info"><span>Ngân hàng</span><b>BIDV</b><span>Chủ tài khoản</span><b>THAM QUANG MINH</b><span>Số tài khoản</span><b>96247159357</b><span>Nội dung</span><b class="order-code">${esc(payOrder.maDon)}</b></div><div class="note">Chuyển đúng số tiền và giữ nguyên nội dung. Pro sẽ tự mở trong vài giây sau khi thanh toán.</div><div class="waiting"><i></i> Đang chờ ngân hàng xác nhận…</div></div>`, '', { full: true });
+}
+function pollPayment() {
+  clearInterval(payTimer); const check = async () => { if (!payOrder) return; try { const r = await fetch(`/api/order-status?maDon=${encodeURIComponent(payOrder.maDon)}&deviceId=${encodeURIComponent(deviceId())}`, { cache: 'no-store' }); if (!r.ok) return; const x = await r.json(); if (x.trangThai === 'da_thanh_toan') { clearInterval(payTimer); billing = { ...billing, pro: true, plan: payOrder.plan, proDen: x.proDen }; saveBilling(); renderPayment(true); } } catch (e) {} }; check(); payTimer = setInterval(check, 3000);
+}
+
 /* ---------- shell ---------- */
 function render() {
   if (!S) { showLock('unlock'); return; }
   document.body.classList.toggle('hide-amt', !!S.settings.hide);
   const views = { home: viewHome, tx: viewTx, twin: viewTwin, plan: viewPlan };
   $('#root').innerHTML = `<div class="app">${views[tab]()}</div>
-  <button class="fab-chat" data-act="chat" aria-label="Mở chatbot tài chính">${ic('chat')}Hỏi Twin</button>
+  <button class="fab-chat" data-act="chat" aria-label="Mở chatbot tài chính">${ic('chat')}Hỏi Twin${isPro() ? '' : ' · Pro'}</button>
   <nav class="nav" aria-label="Điều hướng chính">
     ${navBtn('home', 'overview', 'Tổng quan')}${navBtn('tx', 'list', 'Giao dịch')}
     <button data-act="add" aria-label="Thêm giao dịch"><span class="fab">${ic('plus')}</span></button>
@@ -105,8 +153,9 @@ function render() {
 const navBtn = (id, icon, label) => `<button class="${tab === id ? 'on' : ''}" data-act="tab" data-id="${id}" ${tab === id ? 'aria-current="page"' : ''}>${ic(icon)}<span>${label}</span></button>`;
 function header(sub) {
   return `<header class="top"><button class="brand" data-act="profiles" aria-label="Đổi hoặc tạo hồ sơ" style="text-align:left"><span class="mark"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="9" cy="12" r="5.2" fill="none" stroke="#3CC2A9" stroke-width="2"/><circle cx="15" cy="12" r="5.2" fill="none" stroke="#A497F7" stroke-width="2" stroke-dasharray="2.6 2.2"/></svg></span>
-  <div style="min-width:0"><h1>${S.profile.name ? 'Chào ' + esc(S.profile.name) : 'Financial Twin'}</h1><div class="sub">${PR.list.length > 1 ? esc(curProfile().name) + ' · ' : ''}${sub || fullDate(T())}</div></div></button>
+  <div style="min-width:0"><h1>${S.profile.name ? 'Chào ' + esc(S.profile.name) : 'Financial Twin'} ${isPro() ? '<span class="pro-badge">PRO</span>' : ''}</h1><div class="sub">${PR.list.length > 1 ? esc(curProfile().name) + ' · ' : ''}${sub || fullDate(T())}</div></div></button>
   <div class="row"><button class="iconbtn" data-act="hide" aria-label="${S.settings.hide ? 'Hiện số tiền' : 'Ẩn số tiền'}">${ic(S.settings.hide ? 'eyeoff' : 'eye')}</button>
+  <button class="iconbtn" data-act="pricing" aria-label="Gói dịch vụ">${ic('star')}</button>
   <button class="iconbtn" data-act="settings" aria-label="Cài đặt">${ic('gear')}</button></div></header>`;
 }
 const sampleBanner = () => S.sample ? `<div class="banner">${ic('spark')}<div class="grow"><b>Dữ liệu mẫu</b> · hôm nay giả lập ${FT.dLabel(T())}</div><button class="btn-sm acc" data-act="newprofile">Tạo dữ liệu của tôi</button></div>` : S.fromStatement ? `<div class="banner">${ic('doc')}<div class="grow"><b>Dựng từ sao kê</b> · số liệu tính đến ${FT.dLabel(T())}</div><button class="btn-sm" data-act="resetsample">Về dữ liệu mẫu</button></div>` : '';
@@ -266,7 +315,7 @@ function txRow(t, dup) {
 const QUICK4 = ['Nếu mua điện thoại 20 triệu hôm nay thì sao?', 'Nếu nghỉ việc hai tháng, tôi duy trì được bao lâu?', 'Nếu vay trả góp 12 tháng thì tháng nào dễ thiếu tiền?', 'Muốn có 100 triệu sau hai năm thì cần thay đổi gì?'];
 function viewTwin() {
   const seg = `<div class="seg" role="tablist">${[['whatif', 'Nếu… thì sao?'], ['stress', 'Stress test']].map(([k, v]) => `<button role="tab" aria-selected="${twinTab === k}" class="${twinTab === k ? 'on' : ''}" data-act="twintab" data-id="${k}">${v}</button>`).join('')}</div>`;
-  return header('Bản sao tài chính') + `<div class="stack">${seg}${twinTab === 'whatif' ? viewWhatIf() : viewStress()}</div>`;
+  return header('Bản sao tài chính') + `<div class="stack">${seg}${twinTab === 'whatif' ? viewWhatIf() : isPro() ? viewStress() : proLock('Stress Test dành cho Pro', 'Mô phỏng mất việc, giảm thu nhập, viện phí, tăng tiền nhà và các cú sốc tài chính.')}</div>`;
 }
 function modelCard(M) {
   return `<section class="card"><div class="card-h"><h2>Twin được dựng từ</h2>${M.plan ? `<label class="row small" style="gap:8px">Theo kế hoạch<button class="toggle ${followPlan ? 'on' : ''}" data-act="followplan" aria-pressed="${followPlan}" aria-label="Giả định làm theo kế hoạch tiết kiệm"></button></label>` : ''}</div>
@@ -395,7 +444,7 @@ function stressView(r) {
 /* ---------- KẾ HOẠCH ---------- */
 function viewPlan() {
   const seg = `<div class="seg" role="tablist">${[['coach', 'AI Coach'], ['budget', 'Ngân sách'], ['goals', 'Mục tiêu'], ['bills', 'Hóa đơn']].map(([k, v]) => `<button role="tab" aria-selected="${planTab === k}" class="${planTab === k ? 'on' : ''}" data-act="ptab" data-id="${k}" style="font-size:13px">${v}</button>`).join('')}</div>`;
-  const v = { coach: viewCoach, budget: viewBudget, goals: viewGoals, bills: viewBills }[planTab]();
+  const v = planTab === 'coach' && !isPro() ? proLock('AI Coach dành cho Pro', 'Nhận kế hoạch tiết kiệm bằng số tiền cụ thể, đánh giá mỗi tuần và tự điều chỉnh.') : { coach: viewCoach, budget: viewBudget, goals: viewGoals, bills: viewBills }[planTab]();
   return header('Kế hoạch') + `<div class="stack">${seg}${v}</div>`;
 }
 function viewCoach() {
@@ -537,6 +586,7 @@ async function aiAnswer(question, localObj, history, opts = {}) {
 /* ---------- Chat sheet ---------- */
 const CHATQ = ['Hôm nay tôi được tiêu bao nhiêu?', 'Tháng này tôi chi bao nhiêu cho Grab?', 'Nếu mua điện thoại 20 triệu hôm nay thì sao?', 'Điểm sức khỏe tài chính của tôi thế nào?', 'Có gì bất thường tôi cần chú ý?', 'Muốn có 100 triệu sau hai năm thì cần thay đổi gì?'];
 function openChat() {
+  if (!isPro()) { openPricing('Chatbot AI là tính năng Pro.'); return; }
   $('#layer').innerHTML = `<div class="scrim" data-act="scrim"><div class="sheet full" role="dialog" aria-modal="true" aria-label="Chatbot tài chính"><div class="sheet-h"><span class="cico" style="background:var(--twin-soft);color:var(--twin)">${ic('chat')}</span><h2>Hỏi Twin</h2><button class="iconbtn" data-act="close" aria-label="Đóng">${ic('close')}</button></div>
     <div class="chatwrap"><div class="chatlog" id="chatlog">${chatHtml()}</div>
     <form class="chat-composer" id="chatform"><input class="in" id="chatin" placeholder="Hỏi về tiền của bạn…" autocomplete="off" aria-label="Câu hỏi"><button class="send" aria-label="Gửi">${ic('send')}</button></form></div></div></div>`;
@@ -601,6 +651,7 @@ function openHealth() {
 }
 function openAllAlerts() { const A = FT.alerts2(S); sheet('Cảnh báo chủ động', `<p class="small muted" style="margin:0">Mỗi cảnh báo nói rõ chuyện gì xảy ra, vì sao, ảnh hưởng bao nhiêu tiền, nên làm gì và độ tin cậy.</p><div class="card">${alertList(A)}</div>`, '', { full: true }); }
 function openReport() {
+  if (!isPro()) { openPricing('Báo cáo tuần và tháng đầy đủ là tính năng Pro.'); return; }
   const r = FT.report(S, reportPeriod); const mx = Math.max(...r.cats.map(c => c[1]), 1); const diff = r.a.spend - r.b.spend;
   sheet('Báo cáo', `<div class="seg">${[['week', '7 ngày qua'], ['month', 'Tháng này']].map(([k, v]) => `<button class="${reportPeriod === k ? 'on' : ''}" data-act="rperiod" data-id="${k}">${v}</button>`).join('')}</div>
     <div class="eyebrow">${esc(r.label)}</div>
@@ -616,7 +667,7 @@ function openReport() {
 let addMode = 'text', drafts = [], quick = { type: 'expense', cat: 'an-uong', amount: '', merchant: '', account: null };
 let imp = null; // {drafts, opening, boot, steps, accountId, source}
 let redact = null;
-function openAdd(mode) { if (!S.accounts.length && mode !== 'file') { openOnboard(); return; } addMode = mode || addMode; drafts = []; imp = null; renderAdd(); }
+function openAdd(mode) { if (mode === 'file' && !isPro()) { openPricing('Nhập sao kê PDF/Excel là tính năng Pro. Bạn vẫn có thể ghi chép miễn phí bằng văn bản hoặc chọn nhanh.'); return; } if (!S.accounts.length && mode !== 'file') { openOnboard(); return; } addMode = mode || addMode; drafts = []; imp = null; renderAdd(); }
 function renderAdd() {
   if (imp) return renderImport();
   if (redact) return renderRedact();
@@ -771,6 +822,7 @@ async function miniPdfLines(buf) {
   return { lines, pages };
 }
 async function readFile(file) {
+  if (!isPro() && /\.(pdf|xlsx?|xls)$/i.test(file.name || '')) { openPricing('Nhập sao kê PDF/Excel là tính năng Pro.'); return; }
   const name = file.name.toLowerCase(); const accId = val('impacc');
   try {
     let rows, opening = null, masked = 0, info = '';
@@ -903,6 +955,7 @@ function openBillEdit(id, preset) {
 function openSettings() {
   const bal = FT.balances(S);
   sheet('Cài đặt', `<section class="card"><div class="card-h"><h2>Hồ sơ</h2><button class="btn-sm" data-act="profiles">Đổi hồ sơ</button></div><div class="row"><span class="cico" style="background:var(--accent-soft);color:var(--accent)">${ic(S.sample ? 'spark' : 'coach')}</span><div class="grow"><b>${esc(curProfile().name)}</b><div class="small muted">${PR.list.length} hồ sơ trên thiết bị này</div></div><button class="btn-sm acc" data-act="newprofile">${ic('plus')} Tạo mới</button></div></section>
+  <section class="card"><div class="card-h"><h2>Gói dịch vụ</h2><span class="pill ${isPro() ? 'good' : 'neutral'}">${isPro() ? 'PRO' : 'MIỄN PHÍ'}</span></div><div class="row"><span class="cico" style="background:var(--twin-soft);color:var(--twin)">${ic('star')}</span><div class="grow"><b>${isPro() ? (billing.plan === 'pro_yearly' ? 'Pro theo năm' : 'Pro theo tháng') : 'Gói miễn phí'}</b><div class="small muted">${isPro() ? 'Có hiệu lực đến ' + new Date(billing.proDen).toLocaleDateString('vi-VN') : twinLeft() + '/3 lượt mô phỏng còn lại trong tháng'}</div></div><button class="btn-sm acc" data-act="pricing">${isPro() ? 'Chi tiết' : 'Nâng cấp'}</button></div></section>
   <section class="card"><div class="card-h"><h2>Ví và số dư</h2><button class="btn-sm" data-act="addacc">${ic('plus')} Thêm ví</button></div>
     ${S.accounts.map(a => `<div class="li"><span class="cico" style="background:var(--accent-soft);color:var(--accent)">${ic(a.type === 'credit' ? 'card' : a.type === 'cash' ? 'wallet' : a.type === 'ewallet' ? 'spark' : 'home')}</span><div class="main"><div class="t">${esc(a.name)}</div><div class="s">${a.type === 'credit' ? 'Dư nợ hiện tại ' + FT.vnd(Math.max(0, -(bal[a.id] || 0))) : 'Số dư hiện tại ' + FT.vnd(bal[a.id] || 0)}</div></div><button class="btn-sm" data-act="editacc" data-id="${a.id}">Sửa</button></div>`).join('')}
     <div class="field-row" style="margin-top:10px"><span class="small"><b>Dự phòng tối thiểu</b><br><span class="muted">Luôn giữ trong tài khoản khi tính Safe-to-Spend</span></span><input class="in num" id="set_buffer" value="${fmtIn(S.settings.buffer)}" inputmode="numeric" aria-label="Dự phòng tối thiểu"></div>
@@ -1060,12 +1113,14 @@ document.addEventListener('click', async e => {
   if (a !== 'startplan') S && (S._confirmReplace = false);
   switch (a) {
     case 'tab': tab = id; render(); window.scrollTo(0, 0); break;
-    case 'goplan': closeSheet(); tab = 'plan'; planTab = id; render(); window.scrollTo(0, 0); break;
-    case 'ptab': planTab = id; render(); break;
-    case 'twintab': twinTab = id; render(); break;
+    case 'goplan': if (id === 'coach' && !isPro()) { openPricing('AI Coach là tính năng Pro.'); break; } closeSheet(); tab = 'plan'; planTab = id; render(); window.scrollTo(0, 0); break;
+    case 'ptab': if (id === 'coach' && !isPro()) { openPricing('AI Coach là tính năng Pro.'); break; } planTab = id; render(); break;
+    case 'twintab': if (id === 'stress' && !isPro()) { openPricing('Stress Test là tính năng Pro.'); break; } twinTab = id; render(); break;
     case 'twin': closeSheet(); tab = 'twin'; twinTab = 'whatif'; render(); window.scrollTo(0, 0); break;
     case 'hide': S.settings.hide = !S.settings.hide; save(); render(); if ($('#layer .sheet') && $('#layer .sheet-h h2').textContent === 'Cài đặt') openSettings(); break;
     case 'settings': openSettings(); break;
+    case 'pricing': clearInterval(payTimer); payOrder = null; openPricing(); break;
+    case 'buy': createPayment(id); break;
     case 'report': openReport(); break;
     case 'rperiod': reportPeriod = id; openReport(); break;
     case 'health': closeSheet(); openHealth(); break;
@@ -1077,20 +1132,20 @@ document.addEventListener('click', async e => {
     case 'close': closeSheet(); break;
     case 'chat': openChat(); break;
     case 'chatq': askChat(CHATQ[i]); break;
-    case 'opentwin': closeSheet(); runTwin(el.dataset.v); break;
-    case 'openstress': closeSheet(); tab = 'twin'; twinTab = 'stress'; render(); break;
-    case 'twinq': runTwin(el.dataset.v); break;
+    case 'opentwin': closeSheet(); useTwin(el.dataset.v); break;
+    case 'openstress': if (!isPro()) { openPricing('Stress Test là tính năng Pro.'); break; } closeSheet(); tab = 'twin'; twinTab = 'stress'; render(); break;
+    case 'twinq': useTwin(el.dataset.v); break;
     case 'followplan': followPlan = !followPlan; if (twinRes && twinRes.sc) runTwin(twinQ, twinRes.sc); else render(); break;
     case 'btype': builder.type = id; render(); break;
     case 'brun': { const b = builder; b.amount = parseMoney(val('b_amount')) || b.amount; b.months = Number(val('b_months')) || b.months; b.rate = val('b_rate') !== '' ? Number(val('b_rate')) : b.rate; b.pct = Number(val('b_pct')) || b.pct; b.target = parseMoney(val('b_target')) || b.target;
       const sc = b.type === 'purchase' ? { type: 'purchase', amount: b.amount, label: 'Khoản mua lớn' } : b.type === 'installment' ? { type: 'installment', amount: b.amount, months: b.months, rate: b.rate / 100, label: 'Khoản trả góp' } : b.type === 'jobloss' ? { type: 'jobloss', months: Math.min(12, b.months) } : b.type === 'incomecut' ? { type: 'incomecut', pct: b.pct / 100, months: b.months } : { type: 'goal', target: b.target, months: b.months, name: 'Mục tiêu ' + FT.short(b.target) };
-      runTwin('', sc); break; }
-    case 'altinst': runTwin('', { type: 'installment', amount: twinRes.sc.amount, months: 12, rate: 0, label: twinRes.sc.label }); break;
+      useTwin('', sc); break; }
+    case 'altinst': useTwin('', { type: 'installment', amount: twinRes.sc.amount, months: 12, rate: 0, label: twinRes.sc.label }); break;
     case 'twinexplain': twinExplain(); break;
     case 'adoptplan': { const p = twinRes.plan; const gid = 'g' + FT.uid(); S.goals.push({ id: gid, name: p.name, target: p.target, saved: 0, deadline: FT.shiftM(FT.mkey(T()), p.months) + '-28', monthly: p.need }); S.plan = { ...p, active: true, goalId: gid, goalName: p.name, start: T() }; save(); changed(); tab = 'plan'; planTab = 'coach'; render(); window.scrollTo(0, 0); toast('Đã tạo mục tiêu và kế hoạch'); break; }
     case 'sset': stressCfg[el.dataset.k] = Number(el.dataset.v); render(); break;
     case 'stog': stressCfg.medical = parseMoney(val('s_medical')) || stressCfg.medical; stressCfg.emergencyBuy = parseMoney(val('s_emergency')) || stressCfg.emergencyBuy; stressCfg[el.dataset.k] = !stressCfg[el.dataset.k]; render(); break;
-    case 'srun': runStress(); break;
+    case 'srun': if (!isPro()) { openPricing('Stress Test là tính năng Pro.'); break; } runStress(); break;
     case 'plangap': { planForm = { name: 'Quỹ khẩn cấp', target: Math.round(stressRes.gap6 / 100000) * 100000, months: 12 }; draftPlan = null; tab = 'plan'; planTab = 'coach'; render(); window.scrollTo(0, 0); break; }
     case 'pform': planForm = { name: el.dataset.n, target: Number(el.dataset.t), months: Number(el.dataset.m) }; draftPlan = null; render(); break;
     case 'makeplan': { planForm.name = val('pf_name').trim() || 'Kế hoạch tiết kiệm'; planForm.target = parseMoney(val('pf_target')); planForm.months = Number(val('pf_months')) || 6; if (!planForm.target) { toast('Hãy nhập số tiền cần.'); return; } draftPlan = FT.makePlan(S, { name: planForm.name, target: planForm.target, months: planForm.months }); render(); setTimeout(() => { const v = document.querySelectorAll('.verdict'); if (v.length) v[v.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 30); break; }
@@ -1098,9 +1153,9 @@ document.addEventListener('click', async e => {
       if (!g) { g = { id: 'g' + FT.uid(), name: p.name, target: p.target, saved: 0, deadline: FT.shiftM(FT.mkey(T()), p.months) + '-28', monthly: p.need }; S.goals.push(g); } else { g.monthly = p.need; if (!FT.isEmergency(g)) { g.target = g.saved + p.target; g.deadline = FT.shiftM(FT.mkey(T()), p.months) + '-28'; } }
       S.plan = { ...p, active: true, goalId: g.id, goalName: g.name, start: T() }; S._confirmReplace = false; S._coachAi = null; draftPlan = null; save(); changed(); render(); window.scrollTo(0, 0); toast('Đã bắt đầu kế hoạch'); break; }
     case 'endplan': if (!S._confirmEnd) { S._confirmEnd = true; render(); return; } S.plan = null; S._confirmEnd = false; save(); changed(); render(); toast('Đã kết thúc kế hoạch'); break;
-    case 'coachai': coachAI(); break;
+    case 'coachai': if (!isPro()) { openPricing('AI Coach là tính năng Pro.'); break; } coachAI(); break;
     case 'add': openAdd(); break;
-    case 'addmode': if (!$('#layer .sheet')) { openAdd(id); } else { addMode = id; renderAdd(); } break;
+    case 'addmode': if (id === 'file' && !isPro()) { openPricing('Nhập sao kê PDF/Excel là tính năng Pro.'); break; } if (!$('#layer .sheet')) { openAdd(id); } else { addMode = id; renderAdd(); } break;
     case 'ex': { const t = $('#txtin'); t.value = (t.value.trim() ? t.value.trim() + '\n' : '') + el.dataset.v; t.focus(); break; }
     case 'exnoti': { const t = $('#txtin'); t.value = NOTI_SAMPLE(); break; }
     case 'parse': { const txt = val('txtin'); if (!txt.trim()) { toast('Hãy nhập ít nhất một khoản, ví dụ “Ăn trưa 45 nghìn”.'); return; }
@@ -1206,8 +1261,8 @@ document.addEventListener('change', e => {
 document.addEventListener('submit', e => {
   e.preventDefault();
   if (e.target.id === 'chatform') { const v = $('#chatin').value; $('#chatin').value = ''; askChat(v); }
-  if (e.target.id === 'twinform') runTwin(val('twinq'));
-  if (e.target.id === 'homeask') { const q = val('homeq'); if (q.trim()) runTwin(q); }
+  if (e.target.id === 'twinform') useTwin(val('twinq'));
+  if (e.target.id === 'homeask') { const q = val('homeq'); if (q.trim()) useTwin(q); }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#layer .scrim')) closeSheet(); if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && e.target.id === 'txtin') document.querySelector('[data-act="parse"]')?.click(); });
 document.addEventListener('dragover', e => { const d = e.target.closest && e.target.closest('#drop'); if (d) { e.preventDefault(); d.classList.add('over'); } });
@@ -1216,6 +1271,7 @@ document.addEventListener('drop', e => { const d = e.target.closest && e.target.
 loadProfiles();
 openProfile(PR.active);
 render();
+refreshEntitlement().then(() => render());
 (async () => { try { const s = await window.claude?.use?.('sample'); if (s) { AI = s; const lim = await s.limits().catch(() => null); AIimg = !!(lim && lim.images); AItools = !!(lim && lim.tools); if (S && (tab === 'twin' || tab === 'plan')) render(); } } catch (e) {} })();
 window.__FT_TEST__ = { get S() { return S; }, runTwin, runStress, askChat, startImport, miniPdfLines, readFile };
 })();

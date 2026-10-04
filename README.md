@@ -6,6 +6,16 @@ Financial Twin tạo một **bản sao tài chính** của từng người: cho 
 
 Web app chạy trên trình duyệt điện thoại, giao diện như ứng dụng, không cần cài đặt, không cần máy chủ. Có sẵn dữ liệu mẫu để dùng thử.
 
+## Gói dịch vụ và thanh toán
+
+| Gói | Giá | Quyền sử dụng |
+| --- | ---: | --- |
+| Miễn phí | 0đ | Ghi chép, Safe-to-Spend, cảnh báo cơ bản, 3 lần mô phỏng/tháng |
+| Pro theo tháng | 79.000đ/30 ngày | Toàn bộ Twin, Stress Test, AI Coach, chatbot AI, nhập PDF/Excel và báo cáo đầy đủ |
+| Pro theo năm | 690.000đ/365 ngày | Toàn bộ tính năng Pro, tiết kiệm khoảng 27% so với trả từng tháng |
+
+Thanh toán dùng VietQR và SePay theo luồng: API tạo đơn → Supabase lưu đơn → người dùng chuyển khoản → SePay gửi webhook → server xác minh đúng mã/đúng tiền → tự kích hoạt quyền Pro. Các biến môi trường bắt buộc trên Vercel: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SEPAY_WEBHOOK_API_KEY`. Chạy file `supabase-financial-twin-billing.sql` một lần trong Supabase trước khi nhận thanh toán.
+
 ## Tính năng
 
 **Trọng tâm**
