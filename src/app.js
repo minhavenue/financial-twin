@@ -41,7 +41,7 @@ let saveChain = Promise.resolve();
 function save() {
   if (!S) return;
   const snapshot = JSON.stringify(S), pid = PR.active, key = cryptoKey, salt = cryptoSalt, pinOn = !!S.settings.pinOn;
-  const p = curProfile(); if (p) { const nm = S.sample ? 'Dữ liệu mẫu' : (S.profile && S.profile.name) || p.name || 'Hồ sơ mới'; if (p.name !== nm || p.sample !== !!S.sample) { p.name = nm; p.sample = !!S.sample; saveProfiles(); } }
+  const p = curProfile(); if (p) { const nm = S.sample ? 'Dữ liệu mẫu' : (S.profile && S.profile.name) || p.name || 'Financial Twin'; if (p.name !== nm || p.sample !== !!S.sample) { p.name = nm; p.sample = !!S.sample; saveProfiles(); } }
   saveChain = saveChain.then(async () => {
     try {
       const k = skey(pid);
@@ -59,7 +59,7 @@ let S = null;
 const fixState = () => { S.settings = S.settings || {}; if (S.settings.buffer == null) S.settings.buffer = 500000; S.aiLog = S.aiLog || []; S.rules = S.rules || {}; };
 let lockedRaw = null;
 function createProfile(name) {
-  const id = 'p' + FT.uid(); PR.list.push({ id, name: name || 'Hồ sơ ' + (PR.list.length + 1), sample: false }); saveProfiles();
+  const id = 'p' + FT.uid(); PR.list.push({ id, name: name || 'Financial Twin', sample: false }); saveProfiles();
   const keepLog = S ? S.aiLog : [];
   openProfile(id); S = Object.assign(FT.emptyState(), { v: 2 }); fixState(); S.aiLog = keepLog || []; save(); return id;
 }
@@ -136,9 +136,10 @@ async function syncFromCloud() {
     if (!remote.profiles?.list?.length || !remote.records) return;
     const local = syncPayload();
     const mergedList = remote.profiles.list.map(p => ({ ...p }));
-    local.profiles.list.forEach(p => { if (!mergedList.some(x => x.id === p.id)) mergedList.push({ ...p }); });
+    const localOnly = local.profiles.list.filter(p => !mergedList.some(x => x.id === p.id));
+    localOnly.forEach(p => mergedList.push({ ...p }));
     const mergedRecords = { ...local.records, ...remote.records };
-    const preferredActive = mergedList.some(p => p.id === local.profiles.active) ? local.profiles.active : remote.profiles.active;
+    const preferredActive = localOnly.length && mergedList.some(p => p.id === local.profiles.active) ? local.profiles.active : remote.profiles.active;
     const oldIds = (PR?.list || []).map(p => p.id);
     oldIds.forEach(id => { try { localStorage.removeItem(skey(id)); } catch (e) {} });
     PR = { active: preferredActive, list: mergedList };
@@ -189,7 +190,7 @@ function accountCard() {
   if (!authReady) return `<section class="card auth-card"><span class="spinner"></span><span>Đang kiểm tra tài khoản…</span></section>`;
   if (!authSession) return `<section class="card auth-card"><div class="auth-copy"><h2>Đăng nhập để đồng bộ dữ liệu</h2><p class="small muted">Hồ sơ tài chính và quyền Pro sẽ giống nhau trên điện thoại, máy tính và trình duyệt web.</p></div><button class="btn google-btn" data-act="googlelogin"><span class="google-mark">G</span> Tiếp tục với Google</button></section>`;
   const avatar = authAvatar();
-  return `<section class="card auth-card signed"><div class="row"><span class="auth-avatar">${avatar ? `<img src="${esc(avatar)}" alt="">` : esc(authName().slice(0, 1).toUpperCase())}</span><div class="grow"><b>${esc(authName())}</b><div class="small muted">${esc(authSession.user.email || '')}</div></div><span class="pill good">Đã đăng nhập</span></div><div class="small muted">Hồ sơ được đồng bộ giữa các thiết bị${syncUpdatedAt ? ' · Đã cập nhật ' + new Date(syncUpdatedAt).toLocaleString('vi-VN') : ''}</div><button class="btn ghost block" data-act="syncnow">Đồng bộ ngay</button><button class="btn ghost block" data-act="googlelogout">Đăng xuất</button></section>`;
+  return `<section class="card auth-card signed"><div class="row"><span class="auth-avatar">${avatar ? `<img src="${esc(avatar)}" alt="">` : esc(authName().slice(0, 1).toUpperCase())}</span><div class="grow"><b>${esc(authName())}</b><div class="small muted">${esc(authSession.user.email || '')}</div></div><span class="pill good">Đã đăng nhập</span></div><div class="small muted">Dữ liệu tự động đồng bộ giữa các thiết bị</div><button class="btn ghost block" data-act="syncnow">Đồng bộ ngay</button><button class="btn ghost block" data-act="googlelogout">Đăng xuất</button></section>`;
 }
 function proLock(title, detail) {
   return `<section class="card pro-lock"><span class="pro-crown">${ic('star')}</span><h2>${esc(title)}</h2><p class="small muted">${esc(detail)}</p><button class="btn block" data-act="pricing">Xem gói Pro</button></section>`;
@@ -204,6 +205,11 @@ function openPricing(note = '') {
     ${active ? `<section class="card pro-active"><span class="pill good">PRO đang hoạt động</span><h2>${proPlanName()}</h2><p class="small muted">${proValidity()}.</p></section>` : `<section class="price-card"><div class="price-head"><div><span class="pill neutral">MIỄN PHÍ</span><h2>0đ</h2></div><b>${twinLeft()}/3 lượt Twin còn lại</b></div><p>Ghi chép, Safe-to-Spend, cảnh báo cơ bản và 3 lần mô phỏng mỗi tháng.</p></section>
     <section class="price-card featured"><div class="row between"><span class="pill good">LINH HOẠT</span><span class="small">30 ngày</span></div><h2>Pro theo tháng</h2><div class="price">39.000đ <small>/ tháng</small></div><p>Mở toàn bộ Twin, Stress Test, Coach, chatbot tính toán, PDF/Excel và báo cáo.</p><button class="btn block" data-act="buy" data-id="pro_monthly">Chọn gói tháng</button></section>
     <section class="price-card"><div class="row between"><span class="pill warn">ƯU ĐÃI MỞ BÁN</span><span class="small">100 người đầu tiên</span></div><h2>Pro trọn đời</h2><div class="price">399.000đ <small>/ một lần</small></div><p>Thanh toán một lần, dùng vĩnh viễn toàn bộ tính năng Pro hiện có.</p><button class="btn block" data-act="buy" data-id="pro_lifetime">Mua Pro trọn đời</button></section>`}
+    <section class="card plan-compare"><div class="card-h"><h2>So sánh gói</h2></div>
+      <div class="compare-row compare-head"><b>Tính năng</b><b>Miễn phí</b><b>Pro tháng</b></div>
+      ${[['Ghi chép thu chi', '✓', '✓'], ['Safe-to-Spend', '✓', '✓'], ['Cảnh báo tài chính', 'Cơ bản', 'Đầy đủ'], ['Mô phỏng Financial Twin', '3 lần/tháng', 'Không giới hạn'], ['Stress Test', '—', '✓'], ['AI Coach và chatbot', '—', '✓'], ['Nhập sao kê PDF/Excel', '—', '✓'], ['Báo cáo đầy đủ', '—', '✓']].map(r => `<div class="compare-row"><span>${r[0]}</span><span>${r[1]}</span><strong>${r[2]}</strong></div>`).join('')}
+      <div class="compare-row compare-price"><b>Giá</b><b>0đ</b><b>39.000đ/tháng</b></div>
+    </section>
     <div class="note">Chatbot hiện phân tích bằng bộ máy tính toán của Financial Twin, chưa sử dụng AI tạo sinh bên ngoài.</div><p class="small muted" style="text-align:center">Thanh toán chuyển khoản VietQR qua SePay. Hệ thống tự kích hoạt Pro sau khi ngân hàng báo có.</p>`, '', { full: true });
 }
 async function createPayment(plan) {
@@ -240,7 +246,6 @@ function header(sub) {
   return `<header class="top"><button class="brand" data-act="profiles" aria-label="Đổi hoặc tạo hồ sơ" style="text-align:left"><span class="mark"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="9" cy="12" r="5.2" fill="none" stroke="#3CC2A9" stroke-width="2"/><circle cx="15" cy="12" r="5.2" fill="none" stroke="#A497F7" stroke-width="2" stroke-dasharray="2.6 2.2"/></svg></span>
   <div style="min-width:0"><h1>${S.profile.name ? 'Chào ' + esc(S.profile.name) : 'Financial Twin'} ${isPro() ? '<span class="pro-badge">PRO</span>' : ''}</h1><div class="sub">${PR.list.length > 1 ? esc(curProfile().name) + ' · ' : ''}${sub || fullDate(T())}</div></div></button>
   <div class="row"><button class="iconbtn" data-act="hide" aria-label="${S.settings.hide ? 'Hiện số tiền' : 'Ẩn số tiền'}">${ic(S.settings.hide ? 'eyeoff' : 'eye')}</button>
-  <button class="iconbtn" data-act="pricing" aria-label="Gói dịch vụ">${ic('star')}</button>
   <button class="iconbtn" data-act="settings" aria-label="Cài đặt">${ic('gear')}</button></div></header>`;
 }
 const sampleBanner = () => S.sample ? `<div class="banner">${ic('spark')}<div class="grow"><b>Dữ liệu mẫu</b> · hôm nay giả lập ${FT.dLabel(T())}</div><button class="btn-sm acc" data-act="newprofile">Tạo dữ liệu của tôi</button></div>` : S.fromStatement ? `<div class="banner">${ic('doc')}<div class="grow"><b>Dựng từ sao kê</b> · số liệu tính đến ${FT.dLabel(T())}</div><button class="btn-sm" data-act="resetsample">Về dữ liệu mẫu</button></div>` : '';
@@ -1067,6 +1072,7 @@ function openProfiles() {
 }
 function openNewProfile() {
   sheet('Tạo hồ sơ mới', `<p class="small muted" style="margin:0">Dữ liệu cũ vẫn được giữ, bạn chuyển qua lại giữa các hồ sơ bất cứ lúc nào.</p>
+    <label class="f">Tên hồ sơ hoặc tên của bạn<input class="in" id="np_name" placeholder="Ví dụ: Minh"></label>
     <button class="card row" data-act="np" data-id="manual" style="text-align:left;width:100%"><span class="cico" style="background:var(--accent-soft);color:var(--accent)">${ic('edit')}</span><div class="grow"><b>Nhập thông tin trong 3 phút</b><div class="small muted">Thu nhập, số dư từng ví, khoản cố định, trả góp, ngân sách, quỹ đang có, mục tiêu.</div></div>${ic('chev', 'chev')}</button>
     <button class="card row" data-act="np" data-id="statement" style="text-align:left;width:100%"><span class="cico" style="background:var(--twin-soft);color:var(--twin)">${ic('upload')}</span><div class="grow"><b>Tải sao kê ngân hàng</b><div class="small muted">PDF, CSV hoặc Excel 1–3 tháng. App tự nhận lương, hóa đơn, gợi ý ngân sách.</div></div>${ic('chev', 'chev')}</button>
     <button class="card row" data-act="np" data-id="blank" style="text-align:left;width:100%"><span class="cico" style="background:var(--surface-2);color:var(--muted)">${ic('plus')}</span><div class="grow"><b>Bắt đầu trống</b><div class="small muted">Tự thêm ví và giao dịch sau.</div></div>${ic('chev', 'chev')}</button>`, '');
@@ -1095,8 +1101,8 @@ function doExport(kind) {
 
 /* ---------- Thiết lập ban đầu ---------- */
 let ob = null;
-function openOnboard() {
-  ob = { step: 1, name: '', payday: 5, income: 0, accounts: [['Tiền mặt', 'cash', 0], ['Tài khoản ngân hàng', 'bank', 0], ['Ví điện tử', 'ewallet', 0], ['Thẻ tín dụng (dư nợ)', 'credit', 0]],
+function openOnboard(initialName = '') {
+  ob = { step: 1, name: initialName, payday: 5, income: 0, accounts: [['Tiền mặt', 'cash', 0], ['Tài khoản ngân hàng', 'bank', 0], ['Ví điện tử', 'ewallet', 0], ['Thẻ tín dụng (dư nợ)', 'credit', 0]],
     bills: [['Tiền nhà', 'bill', 'nha-o', 0, 5], ['Điện nước', 'bill', 'nha-o', 0, 15], ['Internet', 'bill', 'nha-o', 0, 10], ['Học phí', 'bill', 'hoc-tap', 0, 5], ['Trả góp / khoản vay', 'loan', 'no', 0, 25, 12], ['Netflix / Spotify', 'sub', 'giai-tri', 0, 12], ['Chuyển tiết kiệm', 'saving', 'tiet-kiem', 0, 6]], budgets: null, reserve: 0, goal: { name: '', target: 0, months: 12 } };
   renderOnboard();
 }
@@ -1316,8 +1322,8 @@ document.addEventListener('click', async e => {
     case 'obgoal': obRead(); ob.goal.name = el.dataset.id; renderOnboard(); break;
     case 'profiles': confirmDel = null; openProfiles(); break;
     case 'newprofile': openNewProfile(); break;
-    case 'np': { const m = el.dataset.id; createProfile(); tab = 'home'; render();
-      if (m === 'manual') openOnboard(); else if (m === 'statement') openAdd('file'); else { closeSheet(); openAccEdit(); toast('Đã tạo hồ sơ trống. Thêm ví đầu tiên của bạn.'); } break; }
+    case 'np': { const m = el.dataset.id, profileName = val('np_name').trim() || 'Financial Twin'; createProfile(profileName); S.profile.name = profileName === 'Financial Twin' ? '' : profileName; save(); tab = 'home'; render();
+      if (m === 'manual') openOnboard(profileName === 'Financial Twin' ? '' : profileName); else if (m === 'statement') openAdd('file'); else { closeSheet(); openAccEdit(); toast(`Đã tạo hồ sơ ${profileName}. Thêm ví đầu tiên của bạn.`); } break; }
     case 'switchprofile': { const id = el.dataset.id; if (id === PR.active) { closeSheet(); break; } closeSheet(); const ok = openProfile(id); tab = 'home'; if (!ok) { S = Object.assign(FT.emptyState(), { v: 2 }); fixState(); render(); showLock('unlock'); } else { render(); toast('Đã chuyển sang ' + curProfile().name); } break; }
     case 'delprofile': { if (confirmDel !== 'delprofile') { confirmDel = 'delprofile'; openProfiles(); return; } confirmDel = null; const gone = PR.active; lsDel(skey(gone)); PR.list = PR.list.filter(p => p.id !== gone); if (!PR.list.length) PR.list.push({ id: 'p' + FT.uid(), name: 'Dữ liệu mẫu', sample: true }); saveProfiles(); closeSheet(); const ok = openProfile(PR.list[0].id); tab = 'home'; if (!ok) { S = Object.assign(FT.emptyState(), { v: 2 }); fixState(); render(); showLock('unlock'); } else { render(); toast('Đã xóa hồ sơ'); } break; }
     case 'hidestart': S.settings.hideStart = true; save(); render(); break;
