@@ -59,7 +59,7 @@ let S = null;
 const fixState = () => { S.settings = S.settings || {}; if (S.settings.buffer == null) S.settings.buffer = 500000; S.aiLog = S.aiLog || []; S.rules = S.rules || {}; };
 let lockedRaw = null;
 function createProfile(name) {
-  const id = 'p' + FT.uid(); PR.list.push({ id, name: name || 'Financial Twin', sample: false }); saveProfiles();
+  const id = 'p' + FT.uid(); PR.list.push({ id, name: name || 'Financial Twin', sample: false, lastUsedAt: Date.now() }); saveProfiles();
   const keepLog = S ? S.aiLog : [];
   openProfile(id); S = Object.assign(FT.emptyState(), { v: 2 }); fixState(); S.aiLog = keepLog || []; save(); return id;
 }
@@ -139,7 +139,11 @@ async function syncFromCloud() {
     const localOnly = local.profiles.list.filter(p => !mergedList.some(x => x.id === p.id));
     localOnly.forEach(p => mergedList.push({ ...p }));
     const mergedRecords = { ...local.records, ...remote.records };
-    const preferredActive = localOnly.length && mergedList.some(p => p.id === local.profiles.active) ? local.profiles.active : remote.profiles.active;
+    let preferredActive = localOnly.length && mergedList.some(p => p.id === local.profiles.active) ? local.profiles.active : remote.profiles.active;
+    const chosen = mergedList.find(p => p.id === preferredActive);
+    const personal = mergedList.filter(p => !p.sample).sort((a, b) => Number(b.lastUsedAt || 0) - Number(a.lastUsedAt || 0));
+    if (chosen?.sample && personal.length && Number(chosen.lastUsedAt || 0) <= Number(personal[0].lastUsedAt || 0)) preferredActive = personal[0].id;
+    if (chosen?.sample && personal.length && !chosen.lastUsedAt && !personal[0].lastUsedAt) preferredActive = personal[0].id;
     const oldIds = (PR?.list || []).map(p => p.id);
     oldIds.forEach(id => { try { localStorage.removeItem(skey(id)); } catch (e) {} });
     PR = { active: preferredActive, list: mergedList };
@@ -204,10 +208,11 @@ function useTwin(q, sc) {
 }
 function openPricing(note = '') {
   const active = isPro();
+  const lifetimeOffer = `<section class="price-card"><div class="row between"><span class="pill warn">ƯU ĐÃI MỞ BÁN</span><span class="small">100 người đầu tiên</span></div><h2>Pro trọn đời</h2><div class="price">399.000đ <small>/ một lần</small></div><p>Thanh toán một lần, dùng vĩnh viễn toàn bộ tính năng Pro hiện có.</p>${purchaseButton('pro_lifetime', isPro() ? 'Nâng cấp lên Pro trọn đời' : 'Mua Pro trọn đời')}</section>`;
   sheet('Gói Financial Twin', `${note ? `<div class="note">${esc(note)}</div>` : ''}
-    ${active ? `<section class="card pro-active"><span class="pill good">PRO đang hoạt động</span><h2>${proPlanName()}</h2><p class="small muted">${proValidity()}.</p></section>` : `<section class="price-card"><div class="price-head"><div><span class="pill neutral">MIỄN PHÍ</span><h2>0đ</h2></div><b>${twinLeft()}/3 lượt Twin còn lại</b></div><p>Ghi chép, Safe-to-Spend, cảnh báo cơ bản và 3 lần mô phỏng mỗi tháng.</p></section>
+    ${active ? `<section class="card pro-active"><span class="pill good">PRO đang hoạt động</span><h2>${proPlanName()}</h2><p class="small muted">${proValidity()}.</p></section>${isLifetime() ? '' : lifetimeOffer}` : `<section class="price-card"><div class="price-head"><div><span class="pill neutral">MIỄN PHÍ</span><h2>0đ</h2></div><b>${twinLeft()}/3 lượt Twin còn lại</b></div><p>Ghi chép, Safe-to-Spend, cảnh báo cơ bản và 3 lần mô phỏng mỗi tháng.</p></section>
     <section class="price-card featured"><div class="row between"><span class="pill good">LINH HOẠT</span><span class="small">30 ngày</span></div><h2>Pro theo tháng</h2><div class="price">39.000đ <small>/ tháng</small></div><p>Mở toàn bộ Twin, Stress Test, Coach, chatbot tính toán, PDF/Excel và báo cáo.</p>${purchaseButton('pro_monthly', 'Chọn gói tháng')}</section>
-    <section class="price-card"><div class="row between"><span class="pill warn">ƯU ĐÃI MỞ BÁN</span><span class="small">100 người đầu tiên</span></div><h2>Pro trọn đời</h2><div class="price">399.000đ <small>/ một lần</small></div><p>Thanh toán một lần, dùng vĩnh viễn toàn bộ tính năng Pro hiện có.</p>${purchaseButton('pro_lifetime', 'Mua Pro trọn đời')}</section>`}
+    ${lifetimeOffer}`}
     <section class="card plan-compare"><div class="card-h"><h2>So sánh gói</h2></div>
       <div class="compare-row compare-head"><b>Tính năng</b><b>Miễn phí</b><b>Pro tháng</b></div>
       ${[['Ghi chép thu chi', '✓', '✓'], ['Safe-to-Spend', '✓', '✓'], ['Cảnh báo tài chính', 'Cơ bản', 'Đầy đủ'], ['Mô phỏng Financial Twin', '3 lần/tháng', 'Không giới hạn'], ['Stress Test', '—', '✓'], ['AI Coach và chatbot', '—', '✓'], ['Nhập sao kê PDF/Excel', '—', '✓'], ['Báo cáo đầy đủ', '—', '✓']].map(r => `<div class="compare-row"><span>${r[0]}</span><span>${r[1]}</span><strong>${r[2]}</strong></div>`).join('')}
@@ -1327,7 +1332,7 @@ document.addEventListener('click', async e => {
     case 'newprofile': openNewProfile(); break;
     case 'np': { const m = el.dataset.id, profileName = val('np_name').trim() || 'Financial Twin'; createProfile(profileName); S.profile.name = profileName === 'Financial Twin' ? '' : profileName; save(); tab = 'home'; render();
       if (m === 'manual') openOnboard(profileName === 'Financial Twin' ? '' : profileName); else if (m === 'statement') openAdd('file'); else { closeSheet(); openAccEdit(); toast(`Đã tạo hồ sơ ${profileName}. Thêm ví đầu tiên của bạn.`); } break; }
-    case 'switchprofile': { const id = el.dataset.id; if (id === PR.active) { closeSheet(); break; } closeSheet(); const ok = openProfile(id); tab = 'home'; if (!ok) { S = Object.assign(FT.emptyState(), { v: 2 }); fixState(); render(); showLock('unlock'); } else { render(); toast('Đã chuyển sang ' + curProfile().name); } break; }
+    case 'switchprofile': { const id = el.dataset.id; if (id === PR.active) { closeSheet(); break; } const selected = PR.list.find(p => p.id === id); if (selected) selected.lastUsedAt = Date.now(); closeSheet(); const ok = openProfile(id); tab = 'home'; if (!ok) { S = Object.assign(FT.emptyState(), { v: 2 }); fixState(); render(); showLock('unlock'); } else { render(); toast('Đã chuyển sang ' + curProfile().name); } break; }
     case 'delprofile': { if (confirmDel !== 'delprofile') { confirmDel = 'delprofile'; openProfiles(); return; } confirmDel = null; const gone = PR.active; lsDel(skey(gone)); PR.list = PR.list.filter(p => p.id !== gone); if (!PR.list.length) PR.list.push({ id: 'p' + FT.uid(), name: 'Dữ liệu mẫu', sample: true }); saveProfiles(); closeSheet(); const ok = openProfile(PR.list[0].id); tab = 'home'; if (!ok) { S = Object.assign(FT.emptyState(), { v: 2 }); fixState(); render(); showLock('unlock'); } else { render(); toast('Đã xóa hồ sơ'); } break; }
     case 'hidestart': S.settings.hideStart = true; save(); render(); break;
     case 'obnext': obRead(); if (ob.step === 2 && !ob.accounts.some(x => x[1] !== 'credit' && x[2] > 0)) { toast('Hãy nhập số dư ít nhất một ví.'); return; } if (ob.step < 5) { ob.step++; renderOnboard(); } else finishOnboard(); break;
