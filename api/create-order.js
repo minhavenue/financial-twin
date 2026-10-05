@@ -2,8 +2,8 @@ import { randomBytes } from "node:crypto";
 import { authUser } from "./_auth.js";
 
 const PLANS = {
-  pro_monthly: { amount: 79000, days: 30, name: "Financial Twin Pro theo tháng" },
-  pro_yearly: { amount: 690000, days: 365, name: "Financial Twin Pro theo năm" },
+  pro_monthly: { amount: 39000, days: 30, name: "Financial Twin Pro theo tháng" },
+  pro_lifetime: { amount: 399000, days: 36500, name: "Financial Twin Pro trọn đời · ưu đãi 100 người đầu tiên" },
 };
 
 const reply = (res, body, status = 200) => {
@@ -31,6 +31,21 @@ async function insert(url, key, row) {
   });
 }
 
+async function count(url, key, params) {
+  const result = await fetch(`${url.replace(/\/$/, "")}/rest/v1/financial_twin_orders?${params}`, {
+    method: "HEAD", headers: { apikey: key, authorization: `Bearer ${key}`, prefer: "count=exact" },
+  });
+  if (!result.ok) throw new Error("count_failed");
+  return Number(result.headers.get("content-range")?.split("/")[1] || 0);
+}
+
+async function lifetimeSlotsUsed(url, key) {
+  const paid = new URLSearchParams({ select: "id", plan: "eq.pro_lifetime", trang_thai: "eq.da_thanh_toan" });
+  const pending = new URLSearchParams({ select: "id", plan: "eq.pro_lifetime", trang_thai: "eq.cho_thanh_toan", het_han_luc: `gt.${new Date().toISOString()}` });
+  const [paidCount, pendingCount] = await Promise.all([count(url, key, paid), count(url, key, pending)]);
+  return paidCount + pendingCount;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return reply(res, { error: "Method not allowed" }, 405);
   const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SECRET_KEY;
@@ -38,6 +53,10 @@ export default async function handler(req, res) {
   const body = typeof req.body === "string" ? (() => { try { return JSON.parse(req.body); } catch { return null; } })() : req.body;
   const plan = PLANS[body?.plan], deviceId = String(body?.deviceId || "");
   if (!plan || !validDevice(deviceId)) return reply(res, { error: "Thông tin gói thanh toán không hợp lệ." }, 400);
+  if (body.plan === "pro_lifetime") {
+    try { if (await lifetimeSlotsUsed(url, key) >= 100) return reply(res, { error: "Ưu đãi trọn đời cho 100 người đầu tiên đã hết suất." }, 409); }
+    catch { return reply(res, { error: "Chưa kiểm tra được số suất ưu đãi. Vui lòng thử lại." }, 500); }
+  }
   const user = await authUser(req, url, key);
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   for (let attempt = 0; attempt < 6; attempt += 1) {

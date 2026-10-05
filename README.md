@@ -11,12 +11,12 @@ Web app chạy trên trình duyệt điện thoại, giao diện như ứng dụ
 | Gói | Giá | Quyền sử dụng |
 | --- | ---: | --- |
 | Miễn phí | 0đ | Ghi chép, Safe-to-Spend, cảnh báo cơ bản, 3 lần mô phỏng/tháng |
-| Pro theo tháng | 79.000đ/30 ngày | Toàn bộ Twin, Stress Test, AI Coach, chatbot AI, nhập PDF/Excel và báo cáo đầy đủ |
-| Pro theo năm | 690.000đ/365 ngày | Toàn bộ tính năng Pro, tiết kiệm khoảng 27% so với trả từng tháng |
+| Pro theo tháng | 39.000đ/30 ngày | Toàn bộ Twin, Stress Test, Coach, chatbot tính toán, nhập PDF/Excel và báo cáo đầy đủ |
+| Pro trọn đời | 399.000đ một lần | Toàn bộ tính năng Pro; ưu đãi giới hạn cho 100 người đầu tiên |
 
 Thanh toán dùng VietQR và SePay theo luồng: API tạo đơn → Supabase lưu đơn → người dùng chuyển khoản → SePay gửi webhook → server xác minh đúng mã/đúng tiền → tự kích hoạt quyền Pro. Các biến môi trường bắt buộc trên Vercel: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SEPAY_WEBHOOK_API_KEY`. Chạy file `supabase-financial-twin-billing.sql` một lần trong Supabase trước khi nhận thanh toán.
 
-Đăng nhập Google dùng Supabase Auth. Tài khoản giúp đồng bộ quyền Pro giữa các thiết bị; dữ liệu tài chính vẫn chỉ lưu cục bộ trên thiết bị và không tự tải lên Supabase.
+Đăng nhập Google dùng Supabase Auth. Tài khoản giúp đồng bộ quyền Pro giữa các thiết bị; dữ liệu tài chính vẫn chỉ lưu cục bộ trên thiết bị và không tự tải lên Supabase. Chatbot hiện dùng bộ máy tính toán của app, chưa gọi dịch vụ AI tạo sinh bên ngoài.
 
 ## Tính năng
 

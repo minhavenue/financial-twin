@@ -25,3 +25,11 @@ alter table public.financial_twin_orders enable row level security;
 alter table public.financial_twin_orders add column if not exists user_id uuid;
 alter table public.financial_twin_orders add column if not exists user_email text;
 create index if not exists financial_twin_orders_user_idx on public.financial_twin_orders (user_id, pro_den desc);
+
+-- Nâng cấp bảng giá 39.000đ/tháng và 399.000đ trọn đời; giữ gói cũ để xử lý các đơn đã tạo trước đó.
+alter table public.financial_twin_orders drop constraint if exists financial_twin_orders_plan_check;
+alter table public.financial_twin_orders drop constraint if exists financial_twin_orders_so_tien_vnd_check;
+alter table public.financial_twin_orders drop constraint if exists financial_twin_orders_so_ngay_check;
+alter table public.financial_twin_orders add constraint financial_twin_orders_plan_check check (plan in ('pro_monthly', 'pro_yearly', 'pro_lifetime'));
+alter table public.financial_twin_orders add constraint financial_twin_orders_so_tien_vnd_check check (so_tien_vnd in (39000, 79000, 399000, 690000));
+alter table public.financial_twin_orders add constraint financial_twin_orders_so_ngay_check check (so_ngay in (30, 365, 36500));
