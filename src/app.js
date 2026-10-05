@@ -218,7 +218,7 @@ function openPricing(note = '') {
       ${[['Ghi chép thu chi', '✓', '✓'], ['Safe-to-Spend', '✓', '✓'], ['Cảnh báo tài chính', 'Cơ bản', 'Đầy đủ'], ['Mô phỏng Financial Twin', '3 lần/tháng', 'Không giới hạn'], ['Stress Test', '—', '✓'], ['AI Coach và chatbot', '—', '✓'], ['Nhập sao kê PDF/Excel', '—', '✓'], ['Báo cáo đầy đủ', '—', '✓']].map(r => `<div class="compare-row"><span>${r[0]}</span><span>${r[1]}</span><strong>${r[2]}</strong></div>`).join('')}
       <div class="compare-row compare-price"><b>Giá</b><b>0đ</b><b>39.000đ/tháng</b></div>
     </section>
-    <div class="note">Chatbot hiện phân tích bằng bộ máy tính toán của Financial Twin, chưa sử dụng AI tạo sinh bên ngoài.</div><p class="small muted" style="text-align:center">Thanh toán chuyển khoản VietQR qua SePay. Hệ thống tự kích hoạt Pro sau khi ngân hàng báo có.</p>`, '', { full: true });
+    <p class="small muted" style="text-align:center">Thanh toán chuyển khoản VietQR qua SePay. Hệ thống tự kích hoạt Pro sau khi ngân hàng báo có.</p>`, '', { full: true });
 }
 async function createPayment(plan) {
   if (!authSession) { toast('Vui lòng đăng nhập Google trước khi mua gói.'); openPricing('Bạn cần đăng nhập để đơn hàng gắn đúng tài khoản và sử dụng được trên mọi thiết bị.'); return; }
