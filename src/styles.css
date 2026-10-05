@@ -152,7 +152,7 @@ svg.chart text { font-family: var(--f-body); font-size: 10.5px; fill: var(--mute
 .sheet.full { max-height: 100%; height: 100%; border-radius: 0; }
 .sheet-h { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; }
 .sheet-h h2 { flex: 1; font-size: 18px; }
-.sheet-b { overflow-y: auto; padding: 4px 16px 16px; display: grid; gap: 14px; align-content: start; }
+.sheet-b { overflow-y: auto; padding: 4px 16px 16px; display: grid; grid-auto-rows: max-content; gap: 14px; align-content: start; }
 .sheet-f { padding: 10px 16px 14px; border-top: 1px solid var(--line); display: flex; gap: 10px; }
 @keyframes up { from { transform: translateY(40px); opacity: 0; } }
 @keyframes fade { from { opacity: 0; } }
@@ -242,7 +242,7 @@ textarea.in { resize: vertical; min-height: 84px; }
 .price-card.featured { border:2px solid var(--twin);background:linear-gradient(160deg,var(--surface),var(--twin-soft)) }
 .price-card h2 { margin:10px 0 4px }
 .price-card p { color:var(--muted);font-size:13px;line-height:1.55 }
-.plan-compare{overflow:visible;min-height:max-content}.compare-row{display:grid;grid-template-columns:minmax(130px,1.5fr) minmax(74px,.75fr) minmax(88px,.85fr);gap:8px;align-items:center;padding:10px 2px;border-top:1px solid var(--line);font-size:13px}.compare-row span:nth-child(n+2),.compare-row strong,.compare-row b:nth-child(n+2){text-align:center}.compare-row strong{color:var(--twin)}.compare-head{border-top:0;padding-top:2px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.compare-price{background:var(--twin-soft);margin:4px -2px -2px;padding:12px 8px;border-radius:12px}.compare-price b:last-child{color:var(--twin)}
+.plan-compare{overflow:hidden}.compare-row{display:grid;grid-template-columns:minmax(130px,1.5fr) minmax(74px,.75fr) minmax(88px,.85fr);gap:8px;align-items:center;padding:10px 2px;border-top:1px solid var(--line);font-size:13px}.compare-row span:nth-child(n+2),.compare-row strong,.compare-row b:nth-child(n+2){text-align:center}.compare-row strong{color:var(--twin)}.compare-head{border-top:0;padding-top:2px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.compare-price{background:var(--twin-soft);margin:4px -2px -2px;padding:12px 8px;border-radius:12px}.compare-price b:last-child{color:var(--twin)}
 .price-head { display:flex;align-items:center;justify-content:space-between;gap:12px }
 .price-head h2 { font-size:28px;margin:7px 0 0 }
 .price { font:700 28px/1.2 var(--f-display);color:var(--text) }
