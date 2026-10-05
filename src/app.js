@@ -190,8 +190,11 @@ function accountCard() {
   if (!authReady) return `<section class="card auth-card"><span class="spinner"></span><span>Đang kiểm tra tài khoản…</span></section>`;
   if (!authSession) return `<section class="card auth-card"><div class="auth-copy"><h2>Đăng nhập để đồng bộ dữ liệu</h2><p class="small muted">Hồ sơ tài chính và quyền Pro sẽ giống nhau trên điện thoại, máy tính và trình duyệt web.</p></div><button class="btn google-btn" data-act="googlelogin"><span class="google-mark">G</span> Tiếp tục với Google</button></section>`;
   const avatar = authAvatar();
-  return `<section class="card auth-card signed"><div class="row"><span class="auth-avatar">${avatar ? `<img src="${esc(avatar)}" alt="">` : esc(authName().slice(0, 1).toUpperCase())}</span><div class="grow"><b>${esc(authName())}</b><div class="small muted">${esc(authSession.user.email || '')}</div></div><span class="pill good">Đã đăng nhập</span></div><div class="small muted">Dữ liệu tự động đồng bộ giữa các thiết bị</div><button class="btn ghost block" data-act="syncnow">Đồng bộ ngay</button><button class="btn ghost block" data-act="googlelogout">Đăng xuất</button></section>`;
+  return `<section class="card auth-card signed"><div class="row"><span class="auth-avatar">${avatar ? `<img src="${esc(avatar)}" alt="">` : esc(authName().slice(0, 1).toUpperCase())}</span><div class="grow"><b>${esc(authName())}</b><div class="small muted">${esc(authSession.user.email || '')}</div></div><span class="pill good">Đã đăng nhập</span></div><div class="small muted">Dữ liệu tự động đồng bộ giữa các thiết bị${syncUpdatedAt ? ' · Lần cuối ' + new Date(syncUpdatedAt).toLocaleString('vi-VN') : ''}</div><button class="btn ghost block" data-act="googlelogout">Đăng xuất</button></section>`;
 }
+const purchaseButton = (plan, label) => authSession
+  ? `<button class="btn block" data-act="buy" data-id="${plan}">${label}</button>`
+  : `<button class="btn block" data-act="googlelogin">Đăng nhập để mua</button>`;
 function proLock(title, detail) {
   return `<section class="card pro-lock"><span class="pro-crown">${ic('star')}</span><h2>${esc(title)}</h2><p class="small muted">${esc(detail)}</p><button class="btn block" data-act="pricing">Xem gói Pro</button></section>`;
 }
@@ -203,8 +206,8 @@ function openPricing(note = '') {
   const active = isPro();
   sheet('Gói Financial Twin', `${note ? `<div class="note">${esc(note)}</div>` : ''}
     ${active ? `<section class="card pro-active"><span class="pill good">PRO đang hoạt động</span><h2>${proPlanName()}</h2><p class="small muted">${proValidity()}.</p></section>` : `<section class="price-card"><div class="price-head"><div><span class="pill neutral">MIỄN PHÍ</span><h2>0đ</h2></div><b>${twinLeft()}/3 lượt Twin còn lại</b></div><p>Ghi chép, Safe-to-Spend, cảnh báo cơ bản và 3 lần mô phỏng mỗi tháng.</p></section>
-    <section class="price-card featured"><div class="row between"><span class="pill good">LINH HOẠT</span><span class="small">30 ngày</span></div><h2>Pro theo tháng</h2><div class="price">39.000đ <small>/ tháng</small></div><p>Mở toàn bộ Twin, Stress Test, Coach, chatbot tính toán, PDF/Excel và báo cáo.</p><button class="btn block" data-act="buy" data-id="pro_monthly">Chọn gói tháng</button></section>
-    <section class="price-card"><div class="row between"><span class="pill warn">ƯU ĐÃI MỞ BÁN</span><span class="small">100 người đầu tiên</span></div><h2>Pro trọn đời</h2><div class="price">399.000đ <small>/ một lần</small></div><p>Thanh toán một lần, dùng vĩnh viễn toàn bộ tính năng Pro hiện có.</p><button class="btn block" data-act="buy" data-id="pro_lifetime">Mua Pro trọn đời</button></section>`}
+    <section class="price-card featured"><div class="row between"><span class="pill good">LINH HOẠT</span><span class="small">30 ngày</span></div><h2>Pro theo tháng</h2><div class="price">39.000đ <small>/ tháng</small></div><p>Mở toàn bộ Twin, Stress Test, Coach, chatbot tính toán, PDF/Excel và báo cáo.</p>${purchaseButton('pro_monthly', 'Chọn gói tháng')}</section>
+    <section class="price-card"><div class="row between"><span class="pill warn">ƯU ĐÃI MỞ BÁN</span><span class="small">100 người đầu tiên</span></div><h2>Pro trọn đời</h2><div class="price">399.000đ <small>/ một lần</small></div><p>Thanh toán một lần, dùng vĩnh viễn toàn bộ tính năng Pro hiện có.</p>${purchaseButton('pro_lifetime', 'Mua Pro trọn đời')}</section>`}
     <section class="card plan-compare"><div class="card-h"><h2>So sánh gói</h2></div>
       <div class="compare-row compare-head"><b>Tính năng</b><b>Miễn phí</b><b>Pro tháng</b></div>
       ${[['Ghi chép thu chi', '✓', '✓'], ['Safe-to-Spend', '✓', '✓'], ['Cảnh báo tài chính', 'Cơ bản', 'Đầy đủ'], ['Mô phỏng Financial Twin', '3 lần/tháng', 'Không giới hạn'], ['Stress Test', '—', '✓'], ['AI Coach và chatbot', '—', '✓'], ['Nhập sao kê PDF/Excel', '—', '✓'], ['Báo cáo đầy đủ', '—', '✓']].map(r => `<div class="compare-row"><span>${r[0]}</span><span>${r[1]}</span><strong>${r[2]}</strong></div>`).join('')}
@@ -213,6 +216,7 @@ function openPricing(note = '') {
     <div class="note">Chatbot hiện phân tích bằng bộ máy tính toán của Financial Twin, chưa sử dụng AI tạo sinh bên ngoài.</div><p class="small muted" style="text-align:center">Thanh toán chuyển khoản VietQR qua SePay. Hệ thống tự kích hoạt Pro sau khi ngân hàng báo có.</p>`, '', { full: true });
 }
 async function createPayment(plan) {
+  if (!authSession) { toast('Vui lòng đăng nhập Google trước khi mua gói.'); openPricing('Bạn cần đăng nhập để đơn hàng gắn đúng tài khoản và sử dụng được trên mọi thiết bị.'); return; }
   sheet('Thanh toán', '<div class="empty"><span class="spinner"></span><b>Đang tạo đơn thanh toán…</b></div>', '', { full: true });
   try {
     const r = await fetch('/api/create-order', { method: 'POST', headers: { 'content-type': 'application/json', ...authHeaders() }, body: JSON.stringify({ plan, deviceId: deviceId() }) });
@@ -1212,7 +1216,6 @@ document.addEventListener('click', async e => {
     case 'settings': openSettings(); break;
     case 'googlelogin': await signInGoogle(); break;
     case 'googlelogout': await signOutGoogle(); break;
-    case 'syncnow': await syncFromCloud(); render(); toast('Đã đồng bộ dữ liệu với tài khoản'); break;
     case 'pricing': clearInterval(payTimer); payOrder = null; openPricing(); break;
     case 'buy': createPayment(id); break;
     case 'report': openReport(); break;

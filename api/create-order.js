@@ -53,15 +53,16 @@ export default async function handler(req, res) {
   const body = typeof req.body === "string" ? (() => { try { return JSON.parse(req.body); } catch { return null; } })() : req.body;
   const plan = PLANS[body?.plan], deviceId = String(body?.deviceId || "");
   if (!plan || !validDevice(deviceId)) return reply(res, { error: "Thông tin gói thanh toán không hợp lệ." }, 400);
+  const user = await authUser(req, url, key);
+  if (!user) return reply(res, { error: "Vui lòng đăng nhập Google trước khi mua gói." }, 401);
   if (body.plan === "pro_lifetime") {
     try { if (await lifetimeSlotsUsed(url, key) >= 100) return reply(res, { error: "Ưu đãi trọn đời cho 100 người đầu tiên đã hết suất." }, 409); }
     catch { return reply(res, { error: "Chưa kiểm tra được số suất ưu đãi. Vui lòng thử lại." }, 500); }
   }
-  const user = await authUser(req, url, key);
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const code = orderCode();
-    const result = await insert(url, key, { ma_don: code, device_id: deviceId, user_id: user?.id || null, user_email: user?.email || null, plan: body.plan, so_tien_vnd: plan.amount, so_ngay: plan.days, trang_thai: "cho_thanh_toan", noi_dung_chuyen_khoan: code, het_han_luc: expiresAt });
+    const result = await insert(url, key, { ma_don: code, device_id: deviceId, user_id: user.id, user_email: user.email, plan: body.plan, so_tien_vnd: plan.amount, so_ngay: plan.days, trang_thai: "cho_thanh_toan", noi_dung_chuyen_khoan: code, het_han_luc: expiresAt });
     if (result.ok) return reply(res, { maDon: code, plan: body.plan, tenGoi: plan.name, soTienVnd: plan.amount, qrUrl: qrUrl(code, plan.amount), hetHanLuc: expiresAt });
     const text = await result.text();
     if (result.status !== 409 && !text.includes("duplicate key")) { console.error("Order insert failed", result.status, text); return reply(res, { error: "Không tạo được đơn thanh toán." }, 500); }
