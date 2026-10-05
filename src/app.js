@@ -253,7 +253,7 @@ function render() {
 const navBtn = (id, icon, label) => `<button class="${tab === id ? 'on' : ''}" data-act="tab" data-id="${id}" ${tab === id ? 'aria-current="page"' : ''}>${ic(icon)}<span>${label}</span></button>`;
 function header(sub) {
   return `<header class="top"><button class="brand" data-act="profiles" aria-label="Đổi hoặc tạo hồ sơ" style="text-align:left"><span class="mark"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="9" cy="12" r="5.2" fill="none" stroke="#3CC2A9" stroke-width="2"/><circle cx="15" cy="12" r="5.2" fill="none" stroke="#A497F7" stroke-width="2" stroke-dasharray="2.6 2.2"/></svg></span>
-  <div style="min-width:0"><h1>${S.profile.name ? 'Chào ' + esc(S.profile.name) : 'Financial Twin'} ${isPro() ? '<span class="pro-badge">PRO</span>' : ''}</h1><div class="sub">${PR.list.length > 1 ? esc(curProfile().name) + ' · ' : ''}${sub || fullDate(T())}</div></div></button>
+  <div style="min-width:0"><h1>${S.profile.name ? 'Chào ' + esc(S.profile.name) : 'Financial Twin'} ${isPro() ? '<span class="pro-badge">PRO</span>' : ''}</h1><div class="sub">Financial Twin · ${sub || fullDate(T())}</div></div></button>
   <div class="row"><button class="iconbtn" data-act="hide" aria-label="${S.settings.hide ? 'Hiện số tiền' : 'Ẩn số tiền'}">${ic(S.settings.hide ? 'eyeoff' : 'eye')}</button>
   <button class="iconbtn" data-act="settings" aria-label="Cài đặt">${ic('gear')}</button></div></header>`;
 }
