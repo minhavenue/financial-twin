@@ -217,7 +217,7 @@ function openPricing(note = '') {
     ${lifetimeOffer}`}
     <section class="card plan-compare"><div class="card-h"><h2>So sánh gói</h2></div>
       <div class="compare-row compare-head"><b>Tính năng</b><b>Miễn phí</b><b>Pro tháng</b></div>
-      ${[['Ghi chép thu chi', '✓', '✓'], ['Safe-to-Spend', '✓', '✓'], ['Hồ sơ cá nhân', '1', 'Không giới hạn'], ['Mục tiêu tài chính', '2', 'Không giới hạn'], ['Cảnh báo tài chính', 'Cơ bản', 'Đầy đủ'], ['Mô phỏng Financial Twin', '3 lần/tháng', 'Không giới hạn'], ['Stress Test', '—', '✓'], ['AI Coach', '—', '✓'], ['Chatbot tài chính', '—', '✓'], ['Nhập sao kê PDF/Excel', '—', '✓'], ['Báo cáo đầy đủ', '—', '✓']].map(r => `<div class="compare-row"><span>${r[0]}</span><span>${r[1]}</span><strong>${r[2]}</strong></div>`).join('')}
+      ${[['Ghi chép thu chi', '✓', '✓'], ['Safe-to-Spend', '✓', '✓'], ['Hồ sơ cá nhân', '1', 'Không giới hạn'], ['Mục tiêu tài chính', '2', 'Không giới hạn'], ['Cảnh báo tài chính', 'Cơ bản', 'Đầy đủ'], ['Mô phỏng Financial Twin', '3 lần/tháng', 'Không giới hạn'], ['Stress Test', '—', '✓'], ['AI Coach', '—', '✓'], ['Chatbot tài chính', '✓', '✓'], ['Nhập sao kê PDF/Excel', '—', '✓'], ['Báo cáo đầy đủ', '—', '✓']].map(r => `<div class="compare-row"><span>${r[0]}</span><span>${r[1]}</span><strong>${r[2]}</strong></div>`).join('')}
       <div class="compare-row compare-price"><b>Giá</b><b>0đ</b><b>39.000đ/tháng</b></div>
     </section>
     <p class="small muted" style="text-align:center">Thanh toán chuyển khoản VietQR qua SePay. Hệ thống tự kích hoạt Pro sau khi ngân hàng báo có.</p>`, '', { full: true });
@@ -245,7 +245,7 @@ function render() {
   document.body.classList.toggle('hide-amt', !!S.settings.hide);
   const views = { home: viewHome, tx: viewTx, twin: viewTwin, plan: viewPlan };
   $('#root').innerHTML = `<div class="app">${views[tab]()}</div>
-  <button class="fab-chat" data-act="chat" aria-label="Mở chatbot tài chính">${ic('chat')}Hỏi Twin${isPro() ? '' : ' · Pro'}</button>
+  <button class="fab-chat" data-act="chat" aria-label="Mở chatbot tài chính">${ic('chat')}Hỏi Twin</button>
   <nav class="nav" aria-label="Điều hướng chính">
     ${navBtn('home', 'overview', 'Tổng quan')}${navBtn('tx', 'list', 'Giao dịch')}
     <button data-act="add" aria-label="Thêm giao dịch"><span class="fab">${ic('plus')}</span></button>
@@ -687,7 +687,6 @@ async function aiAnswer(question, localObj, history, opts = {}) {
 /* ---------- Chat sheet ---------- */
 const CHATQ = ['Hôm nay tôi được tiêu bao nhiêu?', 'Tháng này tôi chi bao nhiêu cho Grab?', 'Nếu mua điện thoại 20 triệu hôm nay thì sao?', 'Điểm sức khỏe tài chính của tôi thế nào?', 'Có gì bất thường tôi cần chú ý?', 'Muốn có 100 triệu sau hai năm thì cần thay đổi gì?'];
 function openChat() {
-  if (!isPro()) { openPricing('Chatbot AI là tính năng Pro.'); return; }
   $('#layer').innerHTML = `<div class="scrim" data-act="scrim"><div class="sheet full" role="dialog" aria-modal="true" aria-label="Chatbot tài chính"><div class="sheet-h"><span class="cico" style="background:var(--twin-soft);color:var(--twin)">${ic('chat')}</span><h2>Hỏi Twin</h2><button class="iconbtn" data-act="close" aria-label="Đóng">${ic('close')}</button></div>
     <div class="chatwrap"><div class="chatlog" id="chatlog">${chatHtml()}</div>
     <form class="chat-composer" id="chatform"><input class="in" id="chatin" placeholder="Hỏi về tiền của bạn…" autocomplete="off" aria-label="Câu hỏi"><button class="send" aria-label="Gửi">${ic('send')}</button></form></div></div></div>`;
