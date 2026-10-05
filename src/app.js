@@ -208,31 +208,6 @@ function useTwin(q, sc) {
 }
 function openPricing(note = '') {
   const active = isPro();
-  const comparisonGroups = [
-    { title: 'Quản lý hằng ngày', rows: [
-      ['Ghi chép thu chi', '✓', '✓'],
-      ['Quản lý nhiều ví và hồ sơ', '✓', '✓'],
-      ['Ngân sách, mục tiêu và hóa đơn', '✓', '✓'],
-      ['Safe-to-Spend', '✓', '✓'],
-      ['Phân loại giao dịch', '✓', '✓'],
-      ['Phát hiện giao dịch trùng', '✓', '✓'],
-      ['Nhập giao dịch từ thông báo', '✓', '✓']
-    ] },
-    { title: 'Dữ liệu và bảo mật', rows: [
-      ['Đồng bộ nhiều thiết bị', '✓', '✓'],
-      ['Mã PIN và mã hóa dữ liệu', '✓', '✓'],
-      ['Xuất dữ liệu CSV/JSON', '✓', '✓']
-    ] },
-    { title: 'Phân tích nâng cao', rows: [
-      ['Cảnh báo tài chính', 'Cơ bản', 'Đầy đủ'],
-      ['Mô phỏng Financial Twin', '3 lần/tháng', 'Không giới hạn'],
-      ['Stress Test', '—', '✓'],
-      ['AI Coach', '—', '✓'],
-      ['Chatbot tài chính', '—', '✓'],
-      ['Nhập sao kê PDF/Excel', '—', '✓'],
-      ['Báo cáo tuần và tháng', '—', '✓']
-    ] }
-  ];
   const lifetimeOffer = `<section class="price-card"><div class="row between"><span class="pill warn">ƯU ĐÃI MỞ BÁN</span><span class="small">100 người đầu tiên</span></div><h2>Pro trọn đời</h2><div class="price">399.000đ <small>/ một lần</small></div><p>Thanh toán một lần, dùng vĩnh viễn toàn bộ tính năng Pro hiện có.</p>${purchaseButton('pro_lifetime', isPro() ? 'Nâng cấp lên Pro trọn đời' : 'Mua Pro trọn đời')}</section>`;
   sheet('Gói Financial Twin', `${note ? `<div class="note">${esc(note)}</div>` : ''}
     ${active ? `<section class="card pro-active"><span class="pill good">PRO đang hoạt động</span><h2>${proPlanName()}</h2><p class="small muted">${proValidity()}.</p></section>${isLifetime() ? '' : lifetimeOffer}` : `<section class="price-card"><div class="price-head"><div><span class="pill neutral">MIỄN PHÍ</span><h2>0đ</h2></div><b>${twinLeft()}/3 lượt Twin còn lại</b></div><p>Ghi chép, Safe-to-Spend, cảnh báo cơ bản và 3 lần mô phỏng mỗi tháng.</p></section>
@@ -240,7 +215,7 @@ function openPricing(note = '') {
     ${lifetimeOffer}`}
     <section class="card plan-compare"><div class="card-h"><h2>So sánh gói</h2></div>
       <div class="compare-row compare-head"><b>Tính năng</b><b>Miễn phí</b><b>Pro tháng</b></div>
-      ${comparisonGroups.map(group => `<div class="compare-group">${group.title}</div>${group.rows.map(r => `<div class="compare-row"><span>${r[0]}</span><span>${r[1]}</span><strong>${r[2]}</strong></div>`).join('')}`).join('')}
+      ${[['Ghi chép thu chi', '✓', '✓'], ['Safe-to-Spend', '✓', '✓'], ['Cảnh báo tài chính', 'Cơ bản', 'Đầy đủ'], ['Mô phỏng Financial Twin', '3 lần/tháng', 'Không giới hạn'], ['Stress Test', '—', '✓'], ['AI Coach và chatbot', '—', '✓'], ['Nhập sao kê PDF/Excel', '—', '✓'], ['Báo cáo đầy đủ', '—', '✓']].map(r => `<div class="compare-row"><span>${r[0]}</span><span>${r[1]}</span><strong>${r[2]}</strong></div>`).join('')}
       <div class="compare-row compare-price"><b>Giá</b><b>0đ</b><b>39.000đ/tháng</b></div>
     </section>
     <p class="small muted" style="text-align:center">Thanh toán chuyển khoản VietQR qua SePay. Hệ thống tự kích hoạt Pro sau khi ngân hàng báo có.</p>`, '', { full: true });
