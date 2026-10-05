@@ -99,7 +99,8 @@ financial-twin/
 - Phần AI (chatbot gọi AI, đọc ảnh hóa đơn, nút "AI giải thích") dùng khả năng `sample` của trang Claude Artifact. Khi chạy trên GitHub Pages hoặc Vercel, app tự chuyển sang **chế độ tính tự động**. Muốn có AI trên tên miền riêng cần thêm một máy chủ nhỏ gọi API mô hình AI bằng khóa riêng (nằm trong lộ trình).
 - Nút tải file (xuất CSV/JSON, sao kê mẫu) dùng khả năng `downloads` của Claude; ở nơi khác app hiện nội dung để sao chép.
 - Đọc PDF dùng pdf.js và đọc Excel dùng SheetJS, tải từ cdnjs khi cần. Nếu không tải được, PDF vẫn đọc được bằng bộ đọc dự phòng viết sẵn trong app.
-- Dữ liệu lưu trong trình duyệt của từng thiết bị (`localStorage`), mỗi hồ sơ một khóa riêng. Khi bật mã PIN, dữ liệu được mã hóa AES-GCM 256-bit bằng khóa sinh từ PIN (PBKDF2, 150.000 vòng).
+- Khi chưa đăng nhập, dữ liệu lưu trong trình duyệt của từng thiết bị (`localStorage`), mỗi hồ sơ một khóa riêng. Sau khi đăng nhập Google, toàn bộ danh sách hồ sơ tự đồng bộ qua Supabase theo `user_id`, nên cùng tài khoản sẽ thấy cùng dữ liệu trên điện thoại và web. Khi bật mã PIN, bản đồng bộ giữ nguyên dữ liệu AES-GCM 256-bit đã mã hóa bằng khóa sinh từ PIN (PBKDF2, 150.000 vòng).
+- Chạy `supabase-financial-twin-sync.sql` một lần để tạo kho đồng bộ. Endpoint `/api/sync-data` chỉ chấp nhận access token Supabase hợp lệ và dùng service key phía server; trình duyệt không được truy cập trực tiếp bảng đồng bộ.
 - Bản dự thi chưa kết nối ngân hàng. Kết nối chính thức dự kiến qua Open API theo Thông tư 64/2024/TT-NHNN.
 
 ## Dữ liệu mẫu

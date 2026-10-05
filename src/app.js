@@ -34,7 +34,7 @@ function loadProfiles() {
   }
   if (!PR.list.some(p => p.id === PR.active)) PR.active = PR.list[0].id;
 }
-const saveProfiles = () => lsSet(PKEY, PR);
+const saveProfiles = () => { lsSet(PKEY, PR); scheduleCloudSync(); };
 const curProfile = () => PR.list.find(p => p.id === PR.active);
 function readRaw() { return lsGet(skey(PR.active)); }
 let saveChain = Promise.resolve();
@@ -47,6 +47,7 @@ function save() {
       const k = skey(pid);
       if (key && pinOn) { const iv = crypto.getRandomValues(new Uint8Array(12)); const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(snapshot)); localStorage.setItem(k, JSON.stringify({ enc: 1, salt: b64(salt), iv: b64(iv), data: b64(ct) })); }
       else localStorage.setItem(k, snapshot);
+      scheduleCloudSync();
     } catch (e) {}
   });
 }
@@ -96,10 +97,53 @@ let payOrder = null, payTimer = null;
 const SUPABASE_URL = 'https://wqmbmffpkyqnskdhfxno.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxbWJtZmZwa3lxbnNrZGhmeG5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NDEwODYsImV4cCI6MjEwNjMxNzA4Nn0.Tv837ZsDGvNVlPUCNcFhu1hrRmHgWEIBbK38FeU9c70';
 const authClient = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, detectSessionInUrl: true } }) || null;
-let authSession = null, authReady = false;
+let authSession = null, authReady = false, syncTimer = null, syncing = false, syncUpdatedAt = null;
 const authHeaders = () => authSession?.access_token ? { authorization: `Bearer ${authSession.access_token}` } : {};
 const authName = () => authSession?.user?.user_metadata?.full_name || authSession?.user?.user_metadata?.name || authSession?.user?.email || '';
 const authAvatar = () => authSession?.user?.user_metadata?.avatar_url || authSession?.user?.user_metadata?.picture || '';
+function syncPayload() {
+  const records = {};
+  (PR?.list || []).forEach(p => { try { records[p.id] = localStorage.getItem(skey(p.id)); } catch (e) { records[p.id] = null; } });
+  return { version: 1, profiles: PR, records };
+}
+async function uploadCloudData(showToast = false) {
+  if (!authSession || syncing) return false;
+  syncing = true;
+  try {
+    await saveChain;
+    const r = await fetch('/api/sync-data', { method: 'PUT', headers: { 'content-type': 'application/json', ...authHeaders() }, body: JSON.stringify({ payload: syncPayload() }) });
+    const x = await r.json();
+    if (!r.ok) throw new Error(x.error || 'Chưa đồng bộ được dữ liệu');
+    syncUpdatedAt = x.updatedAt || new Date().toISOString();
+    if (showToast) toast('Đã đồng bộ dữ liệu lên tài khoản');
+    return true;
+  } catch (e) { if (showToast) toast(e.message || 'Chưa đồng bộ được dữ liệu'); return false; }
+  finally { syncing = false; }
+}
+function scheduleCloudSync() {
+  if (!authSession) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => uploadCloudData(false), 900);
+}
+async function syncFromCloud() {
+  if (!authSession) return;
+  try {
+    const r = await fetch('/api/sync-data', { cache: 'no-store', headers: authHeaders() });
+    const x = await r.json();
+    if (!r.ok) throw new Error(x.error || 'Chưa tải được dữ liệu');
+    const remote = x.payload;
+    if (!remote) { await uploadCloudData(false); return; }
+    if (!remote.profiles?.list?.length || !remote.records) return;
+    const oldIds = (PR?.list || []).map(p => p.id);
+    oldIds.forEach(id => { try { localStorage.removeItem(skey(id)); } catch (e) {} });
+    PR = remote.profiles;
+    lsSet(PKEY, PR);
+    Object.entries(remote.records).forEach(([id, raw]) => { if (typeof raw === 'string') localStorage.setItem(skey(id), raw); });
+    syncUpdatedAt = x.updatedAt || null;
+    openProfile(PR.active);
+    render();
+  } catch (e) { toast('Chưa tải được dữ liệu từ tài khoản. Dữ liệu trên máy vẫn được giữ.'); }
+}
 function deviceId() {
   let id = ''; try { id = localStorage.getItem('financial-twin-device-id') || ''; } catch (e) {}
   if (!/^[a-f0-9-]{20,80}$/i.test(id)) { id = crypto.randomUUID(); try { localStorage.setItem('financial-twin-device-id', id); } catch (e) {} }
@@ -119,7 +163,13 @@ async function refreshEntitlement(quiet = true) {
 async function initAuth() {
   if (!authClient) { authReady = true; return; }
   const { data } = await authClient.auth.getSession(); authSession = data.session || null; authReady = true;
-  authClient.auth.onAuthStateChange((_event, session) => { authSession = session; refreshEntitlement(false); });
+  if (authSession) await syncFromCloud();
+  authClient.auth.onAuthStateChange(async (event, session) => {
+    const wasUser = authSession?.user?.id;
+    authSession = session;
+    if (session && (!wasUser || event === 'SIGNED_IN')) await syncFromCloud();
+    await refreshEntitlement(false);
+  });
 }
 async function signInGoogle() {
   if (!authClient) { toast('Đăng nhập chưa sẵn sàng.'); return; }
@@ -131,9 +181,9 @@ async function signOutGoogle() {
 }
 function accountCard() {
   if (!authReady) return `<section class="card auth-card"><span class="spinner"></span><span>Đang kiểm tra tài khoản…</span></section>`;
-  if (!authSession) return `<section class="card auth-card"><div class="auth-copy"><h2>Đăng nhập để giữ quyền Pro</h2><p class="small muted">Đổi điện thoại vẫn nhận đúng gói đã mua. Dữ liệu tài chính không tự tải lên tài khoản.</p></div><button class="btn google-btn" data-act="googlelogin"><span class="google-mark">G</span> Tiếp tục với Google</button></section>`;
+  if (!authSession) return `<section class="card auth-card"><div class="auth-copy"><h2>Đăng nhập để đồng bộ dữ liệu</h2><p class="small muted">Hồ sơ tài chính và quyền Pro sẽ giống nhau trên điện thoại, máy tính và trình duyệt web.</p></div><button class="btn google-btn" data-act="googlelogin"><span class="google-mark">G</span> Tiếp tục với Google</button></section>`;
   const avatar = authAvatar();
-  return `<section class="card auth-card signed"><div class="row"><span class="auth-avatar">${avatar ? `<img src="${esc(avatar)}" alt="">` : esc(authName().slice(0, 1).toUpperCase())}</span><div class="grow"><b>${esc(authName())}</b><div class="small muted">${esc(authSession.user.email || '')}</div></div><span class="pill good">Đã đăng nhập</span></div><button class="btn ghost block" data-act="googlelogout">Đăng xuất</button></section>`;
+  return `<section class="card auth-card signed"><div class="row"><span class="auth-avatar">${avatar ? `<img src="${esc(avatar)}" alt="">` : esc(authName().slice(0, 1).toUpperCase())}</span><div class="grow"><b>${esc(authName())}</b><div class="small muted">${esc(authSession.user.email || '')}</div></div><span class="pill good">Đã đăng nhập</span></div><div class="small muted">Hồ sơ được đồng bộ giữa các thiết bị${syncUpdatedAt ? ' · Đã cập nhật ' + new Date(syncUpdatedAt).toLocaleString('vi-VN') : ''}</div><button class="btn ghost block" data-act="syncnow">Đồng bộ ngay</button><button class="btn ghost block" data-act="googlelogout">Đăng xuất</button></section>`;
 }
 function proLock(title, detail) {
   return `<section class="card pro-lock"><span class="pro-crown">${ic('star')}</span><h2>${esc(title)}</h2><p class="small muted">${esc(detail)}</p><button class="btn block" data-act="pricing">Xem gói Pro</button></section>`;
@@ -1150,6 +1200,7 @@ document.addEventListener('click', async e => {
     case 'settings': openSettings(); break;
     case 'googlelogin': await signInGoogle(); break;
     case 'googlelogout': await signOutGoogle(); break;
+    case 'syncnow': await uploadCloudData(true); render(); break;
     case 'pricing': clearInterval(payTimer); payOrder = null; openPricing(); break;
     case 'buy': createPayment(id); break;
     case 'report': openReport(); break;
