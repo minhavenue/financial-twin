@@ -134,14 +134,20 @@ async function syncFromCloud() {
     const remote = x.payload;
     if (!remote) { await uploadCloudData(false); return; }
     if (!remote.profiles?.list?.length || !remote.records) return;
+    const local = syncPayload();
+    const mergedList = remote.profiles.list.map(p => ({ ...p }));
+    local.profiles.list.forEach(p => { if (!mergedList.some(x => x.id === p.id)) mergedList.push({ ...p }); });
+    const mergedRecords = { ...local.records, ...remote.records };
+    const preferredActive = mergedList.some(p => p.id === local.profiles.active) ? local.profiles.active : remote.profiles.active;
     const oldIds = (PR?.list || []).map(p => p.id);
     oldIds.forEach(id => { try { localStorage.removeItem(skey(id)); } catch (e) {} });
-    PR = remote.profiles;
+    PR = { active: preferredActive, list: mergedList };
     lsSet(PKEY, PR);
-    Object.entries(remote.records).forEach(([id, raw]) => { if (typeof raw === 'string') localStorage.setItem(skey(id), raw); });
+    Object.entries(mergedRecords).forEach(([id, raw]) => { if (typeof raw === 'string') localStorage.setItem(skey(id), raw); });
     syncUpdatedAt = x.updatedAt || null;
     openProfile(PR.active);
     render();
+    await uploadCloudData(false);
   } catch (e) { toast('Chưa tải được dữ liệu từ tài khoản. Dữ liệu trên máy vẫn được giữ.'); }
 }
 function deviceId() {
