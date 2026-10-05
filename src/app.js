@@ -1206,7 +1206,7 @@ document.addEventListener('click', async e => {
     case 'settings': openSettings(); break;
     case 'googlelogin': await signInGoogle(); break;
     case 'googlelogout': await signOutGoogle(); break;
-    case 'syncnow': await uploadCloudData(true); render(); break;
+    case 'syncnow': await syncFromCloud(); render(); toast('Đã đồng bộ dữ liệu với tài khoản'); break;
     case 'pricing': clearInterval(payTimer); payOrder = null; openPricing(); break;
     case 'buy': createPayment(id); break;
     case 'report': openReport(); break;
