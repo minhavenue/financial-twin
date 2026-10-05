@@ -217,7 +217,7 @@ function openPricing(note = '') {
     ${lifetimeOffer}`}
     <section class="card plan-compare"><div class="card-h"><h2>So sánh gói</h2></div>
       <div class="compare-row compare-head"><b>Tính năng</b><b>Miễn phí</b><b>Pro tháng</b></div>
-      ${[['Ghi chép thu chi', '✓', '✓'], ['Safe-to-Spend', '✓', '✓'], ['Hồ sơ cá nhân', '1', 'Không giới hạn'], ['Mục tiêu tài chính', '2', 'Không giới hạn'], ['Cảnh báo tài chính', 'Cơ bản', 'Đầy đủ'], ['Mô phỏng Financial Twin', '3 lần/tháng', 'Không giới hạn'], ['Stress Test', '—', '✓'], ['AI Coach và chatbot', '—', '✓'], ['Nhập sao kê PDF/Excel', '—', '✓'], ['Báo cáo đầy đủ', '—', '✓']].map(r => `<div class="compare-row"><span>${r[0]}</span><span>${r[1]}</span><strong>${r[2]}</strong></div>`).join('')}
+      ${[['Ghi chép thu chi', '✓', '✓'], ['Safe-to-Spend', '✓', '✓'], ['Hồ sơ cá nhân', '1', 'Không giới hạn'], ['Mục tiêu tài chính', '2', 'Không giới hạn'], ['Cảnh báo tài chính', 'Cơ bản', 'Đầy đủ'], ['Mô phỏng Financial Twin', '3 lần/tháng', 'Không giới hạn'], ['Stress Test', '—', '✓'], ['AI Coach', '—', '✓'], ['Chatbot tài chính', '—', '✓'], ['Nhập sao kê PDF/Excel', '—', '✓'], ['Báo cáo đầy đủ', '—', '✓']].map(r => `<div class="compare-row"><span>${r[0]}</span><span>${r[1]}</span><strong>${r[2]}</strong></div>`).join('')}
       <div class="compare-row compare-price"><b>Giá</b><b>0đ</b><b>39.000đ/tháng</b></div>
     </section>
     <p class="small muted" style="text-align:center">Thanh toán chuyển khoản VietQR qua SePay. Hệ thống tự kích hoạt Pro sau khi ngân hàng báo có.</p>`, '', { full: true });
