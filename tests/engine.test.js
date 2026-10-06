@@ -84,4 +84,12 @@ test('Kiểm tra số liệu: gắn cờ con số AI tự đặt ra', () => {
   assert.strictEqual(v.ok, 2); assert.strictEqual(v.bad.length, 1);
 });
 
+test('Hỏi Twin hướng dẫn sử dụng và chuyển tiếp hỗ trợ', () => {
+  assert.match(FT.supportAnswer('App có những tính năng gì?'), /Safe-to-Spend/);
+  assert.match(FT.supportAnswer('Free và Pro khác nhau thế nào?'), /1 hồ sơ/);
+  assert.match(FT.supportAnswer('Tôi thanh toán rồi nhưng chưa mở gói'), /minhavenue@gmail.com/);
+  assert.match(FT.supportAnswer('Làm sao đồng bộ điện thoại và web?'), /tự đồng bộ/);
+  assert.match(FT.localChat('Cách nhập sao kê PDF?', st).md, /PDF\/Excel dành cho Pro/);
+});
+
 console.log(`\n${pass} bài kiểm tra đạt.`);

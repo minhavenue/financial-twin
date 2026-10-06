@@ -619,10 +619,11 @@ function viewBills() {
 }
 
 /* ---------- AI: chatbot + kiểm tra số ---------- */
-const RULES = `Bạn là Financial Twin, trợ lý tài chính cá nhân nói tiếng Việt. Xưng "tôi", gọi người dùng là "bạn".
+const RULES = `Bạn là Financial Twin, vừa là trợ lý tài chính cá nhân vừa là nhân viên chăm sóc khách hàng của ứng dụng Financial Twin. Xưng "tôi", gọi người dùng là "bạn".
 QUY TẮC SỐ LIỆU: Bạn KHÔNG được tự tính hay tự đặt ra con số. Khi cần số, gọi công cụ (nếu có) hoặc dùng đúng các số trong KẾT QUẢ TÍNH SẴN. Mọi con số bạn viết phải xuất hiện trong kết quả công cụ hoặc dữ liệu được cung cấp. App sẽ tự kiểm tra từng con số.
 CÁCH TRẢ LỜI: câu đầu là kết luận, in đậm bằng **...**. Sau đó 2–5 dòng giải thích bằng số thật, liệt kê bằng dòng bắt đầu "- ". Viết tiền dạng 1.250.000đ. Tối đa khoảng 130 chữ. Không tiêu đề, không bảng, không emoji.
-GIỚI HẠN: chỉ tư vấn chi tiêu, tiết kiệm, trả nợ, kế hoạch. Không khuyên mua cổ phiếu, tiền số hay sản phẩm tài chính cụ thể. Bạn không có quyền ghi dữ liệu hay chuyển tiền. Thiếu dữ liệu thì nói rõ.`;
+KIẾN THỨC SẢN PHẨM: Free có ghi chép, Safe-to-Spend, 1 hồ sơ, 2 mục tiêu, cảnh báo cơ bản, 3 mô phỏng/tháng và chatbot. Pro tháng 39.000đ/30 ngày; Pro trọn đời 399.000đ cho 100 người đầu tiên. Pro mở hồ sơ, mục tiêu, Twin không giới hạn, Stress Test, AI Coach, PDF/Excel và báo cáo đầy đủ. Đăng nhập Google để tự đồng bộ. Thanh toán VietQR qua SePay, đúng tiền và nội dung FT; ngân hàng báo có thì tự kích hoạt. Thanh toán thẻ và tự gia hạn chưa triển khai. Hoàn tiền đang hoàn thiện. Hỗ trợ: minhavenue@gmail.com, Zalo 0945141935.
+GIỚI HẠN: Không khuyên mua cổ phiếu, tiền số hay sản phẩm tài chính cụ thể. Bạn không có quyền ghi dữ liệu hay chuyển tiền. Không yêu cầu mật khẩu hoặc OTP. Thiếu dữ liệu thì nói rõ và hướng dẫn liên hệ hỗ trợ.`;
 function logAI(purpose, payload, images = 0) {
   S.aiLog.unshift({ t: new Date().toISOString(), purpose, chars: payload.length, images, preview: payload.slice(0, 2400) });
   S.aiLog = S.aiLog.slice(0, 30); save();
@@ -685,15 +686,15 @@ async function aiAnswer(question, localObj, history, opts = {}) {
 }
 
 /* ---------- Chat sheet ---------- */
-const CHATQ = ['Hôm nay tôi được tiêu bao nhiêu?', 'Tháng này tôi chi bao nhiêu cho Grab?', 'Nếu mua điện thoại 20 triệu hôm nay thì sao?', 'Điểm sức khỏe tài chính của tôi thế nào?', 'Có gì bất thường tôi cần chú ý?', 'Muốn có 100 triệu sau hai năm thì cần thay đổi gì?'];
+const CHATQ = ['App có những chức năng gì?', 'Cách nhập sao kê PDF/Excel?', 'Free và Pro khác nhau thế nào?', 'Thanh toán rồi chưa mở Pro?', 'Nếu mua điện thoại 20 triệu thì sao?', 'Làm sao đồng bộ điện thoại và web?'];
 function openChat() {
   $('#layer').innerHTML = `<div class="scrim" data-act="scrim"><div class="sheet full" role="dialog" aria-modal="true" aria-label="Chatbot tài chính"><div class="sheet-h"><span class="cico" style="background:var(--twin-soft);color:var(--twin)">${ic('chat')}</span><h2>Hỏi Twin</h2><button class="iconbtn" data-act="close" aria-label="Đóng">${ic('close')}</button></div>
     <div class="chatwrap"><div class="chatlog" id="chatlog">${chatHtml()}</div>
-    <form class="chat-composer" id="chatform"><input class="in" id="chatin" placeholder="Hỏi về tiền của bạn…" autocomplete="off" aria-label="Câu hỏi"><button class="send" aria-label="Gửi">${ic('send')}</button></form></div></div></div>`;
+    <form class="chat-composer" id="chatform"><input class="in" id="chatin" placeholder="Hỏi cách dùng hoặc hỏi về tài chính…" autocomplete="off" aria-label="Câu hỏi"><button class="send" aria-label="Gửi">${ic('send')}</button></form></div></div></div>`;
   scrollChat();
 }
 function chatHtml() {
-  return `<div class="msg-a"><p><b>Tôi là bản sao tài chính của bạn.</b> Tôi trả lời bằng số liệu thật trong app. Mọi con số do bộ máy tính toán đưa ra, tôi chỉ giải thích.</p><div class="by">${AI ? `${ic('spark')} AI đang bật${AItools ? ' · gọi công cụ tính toán' : ''} · tự kiểm tra số liệu` : `${ic('chart')} Chế độ tính tự động`}</div></div>
+  return `<div class="msg-a"><p><b>Xin chào, tôi là Hỏi Twin.</b> Tôi có thể hướng dẫn mọi thao tác trong Financial Twin, giải thích gói dịch vụ và trả lời câu hỏi tài chính bằng số liệu trong hồ sơ của bạn.</p><div class="by">${AI ? `${ic('spark')} Trợ lý đang bật${AItools ? ' · gọi công cụ tính toán' : ''} · tự kiểm tra số liệu` : `${ic('chart')} Trợ lý hướng dẫn + bộ máy tính toán`}</div></div>
     ${chat.map((m, i) => m.role === 'user' ? `<div class="msg-u">${esc(m.content)}</div>` : msgA(m, i)).join('')}
     <div class="chips">${CHATQ.map((q, i) => `<button class="chip" data-act="chatq" data-i="${i}">${esc(q)}</button>`).join('')}</div><div id="chatEnd"></div>`;
 }

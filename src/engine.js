@@ -887,6 +887,7 @@
   }
   function localChat(q, st) {
     const n = norm(q);
+    const help = FT.supportAnswer(q); if (help) return { kind: 'help', md: help };
     const sc = parseScenario(q);
     if (sc && sc.type === 'stress') { const r = stressTest(st, { jobLoss: sc.jobLoss || 0, medical: sc.medical || 0 }); return { kind: 'stress', data: r, md: stressMd(r) }; }
     if (sc && sc.type === 'goal') { const p = makePlan(st, { name: sc.name, target: sc.target, months: sc.months }); const w = whatIf(st, sc); return { kind: 'goal', data: { plan: p, w }, md: goalMd(p, w) }; }
