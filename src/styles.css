@@ -163,6 +163,14 @@ label.f { display: grid; gap: 5px; font-size: 13px; font-weight: 600; color: var
 .in { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 15px; color: var(--ink); min-width: 0; }
 .in:focus { border-color: var(--accent); outline: none; }
 textarea.in { resize: vertical; min-height: 84px; }
+.voice-field { position: relative; }
+.voice-field textarea.in { padding-right: 82px; }
+.voice-btn { width: 44px; height: 44px; flex: none; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--twin-soft); color: var(--twin); border: 1px solid color-mix(in srgb, var(--twin) 24%, transparent); }
+.voice-btn .ico { width: 20px; height: 20px; }
+.voice-btn.large { position: absolute; top: 8px; right: 8px; width: auto; padding: 0 12px; font-size: 13px; font-weight: 700; }
+.voice-btn.listening { background: var(--bad); color: #fff; border-color: var(--bad); animation: voicePulse 1.1s ease-in-out infinite; }
+.voice-status { padding: 0 18px 10px; color: var(--muted); font-size: 11.5px; text-align: center; background: var(--bg); }
+@keyframes voicePulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--bad) 18%, transparent); } }
 .in.big { font-family: var(--f-display); font-size: 26px; font-weight: 600; text-align: center; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .catgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }

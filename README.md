@@ -30,7 +30,7 @@ Thanh toán dùng VietQR và SePay theo luồng: API tạo đơn → Supabase l�
 | AI Coach | Kế hoạch tiết kiệm bằng số tiền cụ thể, đánh giá từng tuần và điều chỉnh |
 | Cảnh báo chủ động | Mỗi cảnh báo nói rõ: chuyện gì, vì sao, ảnh hưởng bao nhiêu tiền, nên làm gì, độ tin cậy |
 | Sức khỏe tài chính | Điểm 0–100 từ 6 yếu tố, có giải thích và cách cải thiện |
-| Chatbot "Hỏi Twin" | Hỏi bằng lời thường; AI gọi công cụ của bộ máy tính toán để lấy số |
+| Chatbot "Trợ lý Twin" | Hỏi bằng lời thường hoặc giọng nói; trợ lý hướng dẫn sử dụng và gọi bộ máy tính toán để lấy số |
 | Nhập liệu đa phương thức | Gõ, giọng nói (micro bàn phím), ảnh hóa đơn, dán thông báo ngân hàng, sao kê PDF, CSV, Excel; tự phát hiện trùng, đánh dấu dòng chưa chắc chắn, chờ xác nhận trước khi lưu |
 | Quyền riêng tư | Che số tài khoản trước khi gửi AI, tô đen vùng nhạy cảm trên ảnh, nhật ký dữ liệu đã gửi AI, mã PIN kèm mã hóa AES-GCM |
 

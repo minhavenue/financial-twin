@@ -79,6 +79,7 @@ let tab = 'home', planTab = 'coach', twinTab = 'whatif', txFilter = 'all', txQue
 let twinRes = null, twinQ = '', followPlan = true, builder = { type: 'purchase', amount: 20000000, months: 12, rate: 0, pct: 30, target: 100000000, label: '' };
 let stressCfg = { jobLoss: 2, incomeCut: 0, medical: 15000000, medicalOn: true, rentUp: 0, emergencyBuy: 8000000, emergencyOn: false, loanUp: 0 }, stressRes = null;
 let openAlerts = new Set(), chat = [], AI = null, AIimg = false, AItools = false, asking = false;
+let voiceRecognition = null, voiceButton = null;
 let draftPlan = null, planForm = { name: '', target: 15000000, months: 6, goalId: '' };
 const money = n => `<span class="amt-v num">${FT.vnd(n)}</span>`;
 function toast(t) { const el = document.createElement('div'); el.className = 'toast'; el.textContent = t; el.setAttribute('role', 'status'); document.body.appendChild(el); setTimeout(() => el.remove(), 2800); }
@@ -91,6 +92,30 @@ const parseMoney = v => { const s = String(v || '').trim(); if (!s) return 0; co
 const fmtIn = n => n ? Math.round(n).toLocaleString('vi-VN') : '';
 const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
 const changed = () => { twinRes = null; stressRes = null; };
+function startVoice(targetId, button) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) { toast('Trình duyệt này chưa hỗ trợ nhập giọng nói. Hãy dùng Chrome hoặc Edge.'); return; }
+  if (voiceRecognition) { voiceRecognition.stop(); return; }
+  const input = document.getElementById(targetId); if (!input) return;
+  const base = input.value.trim();
+  const recognition = new SpeechRecognition();
+  voiceRecognition = recognition; voiceButton = button;
+  recognition.lang = 'vi-VN'; recognition.continuous = false; recognition.interimResults = true; recognition.maxAlternatives = 1;
+  button.classList.add('listening'); button.setAttribute('aria-label', 'Dừng nghe');
+  const status = document.getElementById(button.dataset.status || 'voice-status');
+  if (status) status.textContent = 'Đang nghe… Hãy nói rõ nội dung và số tiền.';
+  recognition.onresult = event => {
+    let heard = ''; for (let i = event.resultIndex; i < event.results.length; i++) heard += event.results[i][0].transcript;
+    input.value = (base ? base + (input.tagName === 'TEXTAREA' ? '\n' : ' ') : '') + heard.trim();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  recognition.onerror = event => {
+    const msg = event.error === 'not-allowed' ? 'Hãy cho phép dùng micro để nhập bằng giọng nói.' : event.error === 'no-speech' ? 'Chưa nghe thấy giọng nói. Hãy thử lại.' : 'Chưa nhận dạng được giọng nói.';
+    toast(msg);
+  };
+  recognition.onend = () => { button.classList.remove('listening'); button.setAttribute('aria-label', 'Nhập bằng giọng nói'); if (status) status.textContent = input.value.trim() ? 'Đã nhận giọng nói. Hãy kiểm tra lại trước khi gửi hoặc lưu.' : 'Bấm micro và bắt đầu nói.'; voiceRecognition = null; voiceButton = null; input.focus(); };
+  try { recognition.start(); } catch (e) { voiceRecognition = null; button.classList.remove('listening'); toast('Micro đang được sử dụng. Hãy thử lại.'); }
+}
 
 /* ---------- gói dịch vụ + SePay ---------- */
 const BILL_KEY = 'financial-twin-billing-v1';
@@ -245,7 +270,7 @@ function render() {
   document.body.classList.toggle('hide-amt', !!S.settings.hide);
   const views = { home: viewHome, tx: viewTx, twin: viewTwin, plan: viewPlan };
   $('#root').innerHTML = `<div class="app">${views[tab]()}</div>
-  <button class="fab-chat" data-act="chat" aria-label="Mở chatbot tài chính">${ic('chat')}Hỏi Twin</button>
+  <button class="fab-chat" data-act="chat" aria-label="Mở Trợ lý Twin">${ic('chat')}Trợ lý Twin</button>
   <nav class="nav" aria-label="Điều hướng chính">
     ${navBtn('home', 'overview', 'Tổng quan')}${navBtn('tx', 'list', 'Giao dịch')}
     <button data-act="add" aria-label="Thêm giao dịch"><span class="fab">${ic('plus')}</span></button>
@@ -293,7 +318,7 @@ function viewHome() {
     ${H.downs.slice(0, 2).map(d => `<div class="row"><span class="up">▼ ${d.lost}</span><span class="muted">${esc(d.name)}: ${esc(d.value)}</span></div>`).join('')}
     ${H.ups[0] ? `<div class="row"><span class="down">▲</span><span class="muted">${esc(H.ups[0].name)} tốt</span></div>` : ''}</div></button>
   <section class="card"><div class="card-h"><h2>Bản sao tài chính</h2><div class="twin-legend"><span><i></i>Thực tế</span><span><i class="d"></i>Dự báo</span></div></div>${monthChart(f)}
-    <form class="ask-box" id="homeask" style="margin-top:12px"><input class="in" id="homeq" placeholder="Nếu mua laptop 20 triệu thì sao?" aria-label="Hỏi Twin"><button class="btn">${ic('twin')}</button></form>
+    <form class="ask-box" id="homeask" style="margin-top:12px"><input class="in" id="homeq" placeholder="Nếu mua laptop 20 triệu thì sao?" aria-label="Trợ lý Twin"><button class="btn">${ic('twin')}</button></form>
     <div class="chips scroll" style="margin-top:8px">${['Nếu mua điện thoại 20 triệu hôm nay thì sao?', 'Nếu nghỉ việc hai tháng, tôi duy trì được bao lâu?'].map((q, i) => `<button class="chip" data-act="twinq" data-v="${esc(q)}">${esc(q)}</button>`).join('')}</div></section>
   <section class="card"><div class="card-h"><h2>Cảnh báo chủ động</h2><span class="tag">${A.length}</span></div>${alertList(A.slice(0, 5))}
     ${A.length > 5 ? `<button class="link" data-act="allalerts" style="margin-top:6px">Xem tất cả ${A.length} cảnh báo ${ic('arrow')}</button>` : ''}</section>
@@ -438,7 +463,7 @@ function viewWhatIf() {
     : b.type === 'jobloss' ? `<label class="f">Số tháng không có lương<input class="in" id="b_months" type="number" min="1" max="12" value="${Math.min(b.months, 12)}"></label>`
     : b.type === 'incomecut' ? `<div class="grid2"><label class="f">Giảm (%)<input class="in" id="b_pct" type="number" min="5" max="90" value="${b.pct}"></label><label class="f">Trong (tháng)<input class="in" id="b_months" type="number" min="1" max="36" value="${b.months}"></label></div>`
     : `<div class="grid2"><label class="f">Số tiền cần<input class="in num" id="b_target" value="${fmtIn(b.target)}" inputmode="numeric"></label><label class="f">Trong (tháng)<input class="in" id="b_months" type="number" min="1" max="120" value="${b.months}"></label></div>`;
-  return modelCard(M) + `<section class="card"><div class="card-h"><h2>Hỏi Twin</h2></div>
+  return modelCard(M) + `<section class="card"><div class="card-h"><h2>Trợ lý Twin</h2></div>
     <form class="ask-box" id="twinform"><input class="in" id="twinq" value="${esc(twinQ)}" placeholder="Nếu… thì sao?" aria-label="Câu hỏi mô phỏng"><button class="btn">Mô phỏng</button></form>
     <div class="chips" style="margin-top:10px">${QUICK4.map(q => `<button class="chip" data-act="twinq" data-v="${esc(q)}">${esc(q)}</button>`).join('')}</div>
     <details class="builder" style="margin-top:12px"><summary>${ic('chev', 'chev')} Hoặc tự chọn kịch bản</summary><div class="stack" style="margin-top:10px;gap:10px">
@@ -688,13 +713,13 @@ async function aiAnswer(question, localObj, history, opts = {}) {
 /* ---------- Chat sheet ---------- */
 const CHATQ = ['App có những chức năng gì?', 'Cách nhập sao kê PDF/Excel?', 'Free và Pro khác nhau thế nào?', 'Thanh toán rồi chưa mở Pro?', 'Nếu mua điện thoại 20 triệu thì sao?', 'Làm sao đồng bộ điện thoại và web?'];
 function openChat() {
-  $('#layer').innerHTML = `<div class="scrim" data-act="scrim"><div class="sheet full" role="dialog" aria-modal="true" aria-label="Chatbot tài chính"><div class="sheet-h"><span class="cico" style="background:var(--twin-soft);color:var(--twin)">${ic('chat')}</span><h2>Hỏi Twin</h2><button class="iconbtn" data-act="close" aria-label="Đóng">${ic('close')}</button></div>
+  $('#layer').innerHTML = `<div class="scrim" data-act="scrim"><div class="sheet full" role="dialog" aria-modal="true" aria-label="Trợ lý tài chính"><div class="sheet-h"><span class="cico" style="background:var(--twin-soft);color:var(--twin)">${ic('chat')}</span><h2>Trợ lý Twin</h2><button class="iconbtn" data-act="close" aria-label="Đóng">${ic('close')}</button></div>
     <div class="chatwrap"><div class="chatlog" id="chatlog">${chatHtml()}</div>
-    <form class="chat-composer" id="chatform"><input class="in" id="chatin" placeholder="Hỏi cách dùng hoặc hỏi về tài chính…" autocomplete="off" aria-label="Câu hỏi"><button class="send" aria-label="Gửi">${ic('send')}</button></form></div></div></div>`;
+    <form class="chat-composer" id="chatform"><input class="in" id="chatin" placeholder="Hỏi cách dùng hoặc hỏi về tài chính…" autocomplete="off" aria-label="Câu hỏi"><button type="button" class="voice-btn" data-act="voice" data-target="chatin" data-status="chat-voice-status" aria-label="Nhập bằng giọng nói">${ic('mic')}</button><button class="send" aria-label="Gửi">${ic('send')}</button></form><div class="voice-status" id="chat-voice-status" aria-live="polite">Bấm micro để nói câu hỏi.</div></div></div></div>`;
   scrollChat();
 }
 function chatHtml() {
-  return `<div class="msg-a"><p><b>Xin chào, tôi là Hỏi Twin.</b> Tôi có thể hướng dẫn mọi thao tác trong Financial Twin, giải thích gói dịch vụ và trả lời câu hỏi tài chính bằng số liệu trong hồ sơ của bạn.</p><div class="by">${AI ? `${ic('spark')} Trợ lý đang bật${AItools ? ' · gọi công cụ tính toán' : ''} · tự kiểm tra số liệu` : `${ic('chart')} Trợ lý hướng dẫn + bộ máy tính toán`}</div></div>
+  return `<div class="msg-a"><p><b>Xin chào, tôi là Trợ lý Twin.</b> Tôi có thể hướng dẫn mọi thao tác trong Financial Twin, giải thích gói dịch vụ và trả lời câu hỏi tài chính bằng số liệu trong hồ sơ của bạn.</p><div class="by">${AI ? `${ic('spark')} Trợ lý đang bật${AItools ? ' · gọi công cụ tính toán' : ''} · tự kiểm tra số liệu` : `${ic('chart')} Trợ lý hướng dẫn + bộ máy tính toán`}</div></div>
     ${chat.map((m, i) => m.role === 'user' ? `<div class="msg-u">${esc(m.content)}</div>` : msgA(m, i)).join('')}
     <div class="chips">${CHATQ.map((q, i) => `<button class="chip" data-act="chatq" data-i="${i}">${esc(q)}</button>`).join('')}</div><div id="chatEnd"></div>`;
 }
@@ -775,9 +800,9 @@ function renderAdd() {
   if (drafts.length) return renderConfirm();
   const tabs = [['text', 'type', 'Gõ / nói'], ['image', 'camera', 'Ảnh'], ['file', 'doc', 'Sao kê, file'], ['quick', 'grid', 'Chọn nhanh']];
   let body = `<div class="seg">${tabs.map(([k, i, v]) => `<button class="${addMode === k ? 'on' : ''}" data-act="addmode" data-id="${k}" style="display:grid;justify-items:center;gap:2px;font-size:12.5px">${ic(i)}${v}</button>`).join('')}</div>`;
-  if (addMode === 'text') body += `<label class="f">Nhập như khi nhắn tin, hoặc dán thông báo ngân hàng<textarea class="in" id="txtin" placeholder="Ăn trưa 45 nghìn&#10;Chiều nay đổ xăng 100 nghìn&#10;Grab 62k bằng thẻ, Highlands 59k momo"></textarea></label>
+  if (addMode === 'text') body += `<label class="f">Nhập như khi nhắn tin, nói, hoặc dán thông báo ngân hàng<div class="voice-field"><textarea class="in" id="txtin" placeholder="Ăn trưa 45 nghìn&#10;Chiều nay đổ xăng 100 nghìn&#10;Grab 62k bằng thẻ, Highlands 59k momo"></textarea><button type="button" class="voice-btn large" data-act="voice" data-target="txtin" data-status="voice-status" aria-label="Nhập bằng giọng nói">${ic('mic')}<span>Nói</span></button></div></label>
     <div class="chips">${['Ăn trưa 45 nghìn', 'Chiều nay đổ xăng 100 nghìn', 'Grab 62k bằng thẻ', 'Đi chợ 320k hôm qua', 'Nhận thưởng 2tr'].map(x => `<button class="chip" data-act="ex" data-v="${esc(x)}">${esc(x)}</button>`).join('')}<button class="chip" data-act="exnoti">Dán thông báo mẫu</button></div>
-    <div class="note row" style="align-items:flex-start">${ic('mic')}<span>Muốn nói thay vì gõ? Chạm vào ô nhập rồi bấm micro trên bàn phím điện thoại. App tự nhận ra thông báo biến động số dư khi bạn dán vào, và che số tài khoản.</span></div>`;
+    <div class="note row" style="align-items:flex-start">${ic('mic')}<span id="voice-status" aria-live="polite">Bấm nút Nói, cho phép micro và đọc tự nhiên, ví dụ “Ăn trưa 55 nghìn bằng tiền mặt”. Hãy kiểm tra lại trước khi lưu.</span></div>`;
   else if (addMode === 'image') body += `<div class="drop" id="drop">${ic('camera')}<b>Chụp hóa đơn hoặc ảnh giao dịch</b><span class="small muted">Bạn sẽ tô đen vùng nhạy cảm (số tài khoản, tên) trước khi ảnh được gửi cho AI.</span>
       <label class="btn" style="cursor:pointer">${ic('camera')} Chọn ảnh<input type="file" id="imgin" accept="image/*" hidden></label></div>
       ${AI && AIimg ? '' : `<div class="note">Bản xem này chưa gửi được ảnh cho AI. Dùng thử luồng xác nhận với ảnh mẫu bên dưới.</div>`}
@@ -1236,6 +1261,7 @@ document.addEventListener('click', async e => {
     case 'deldup': { const t = S.txns.find(x => x.id === id); S.txns = S.txns.filter(x => x.id !== id); save(); changed(); render(); toast(t ? `Đã xóa bản trùng ${t.merchant} ${FT.vnd(t.amount)}` : 'Đã xóa'); break; }
     case 'close': closeSheet(); break;
     case 'chat': openChat(); break;
+    case 'voice': startVoice(el.dataset.target, el); break;
     case 'chatq': askChat(CHATQ[i]); break;
     case 'opentwin': closeSheet(); useTwin(el.dataset.v); break;
     case 'openstress': if (!isPro()) { openPricing('Stress Test là tính năng Pro.'); break; } closeSheet(); tab = 'twin'; twinTab = 'stress'; render(); break;
